@@ -11,13 +11,23 @@ struct RootView: View {
     @EnvironmentObject var session: SessionManager
 
     var body: some View {
-        Group {
-            if session.isLoggedIn {
-                MainTabView()
-            } else {
-                LoginView()
+        GeometryReader { proxy in
+            Group {
+                if session.isLoggedIn {
+                    MainTabView()
+                } else {
+                    LoginView()
+                }
             }
+            .frame(width: proxy.size.width, height: proxy.size.height)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+}
+
+#Preview("Logged In") {
+    let session = SessionManager()
+    session.isLoggedIn = true
+
+    return RootView()
+        .environmentObject(session)
 }
