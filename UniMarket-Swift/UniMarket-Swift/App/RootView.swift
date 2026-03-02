@@ -11,10 +11,13 @@ struct RootView: View {
     @EnvironmentObject var session: SessionManager
 
     var body: some View {
-        if session.isLoggedIn {
-            MainTabView()
-        } else {
-            LoginView()
+        Group {
+            if session.isLoggedIn {
+                MainTabView()
+            } else {
+                LoginView()
+            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

@@ -8,7 +8,7 @@
 import SwiftUI
 
 enum MainTab: Hashable {
-    case home, search, listings, profile
+    case home, search, activity, profile
 }
 
 struct MainTabView: View {
@@ -16,36 +16,37 @@ struct MainTabView: View {
     @State private var showUpload = false
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            Group {
-                switch selectedTab {
-                case .home:
-                    NavigationStack {
-                        HomeView(
-                            onBrowseItems: { selectedTab = .search },
-                            onStartSelling: { showUpload = true }
-                        )
-                    }
-                case .search:
-                    NavigationStack { SearchView() }
-                case .listings:
-                    NavigationStack { ListingsView() }
-                case .profile:
-                    NavigationStack { ProfileView() }
-                }
-            }
+        contentView
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .safeAreaInset(edge: .bottom) {
-                Color.clear.frame(height: 90)
+            .overlay(alignment: .bottom) {
+                CustomTabBar(
+                    selectedTab: $selectedTab,
+                    onTapUpload: { showUpload = true }
+                )
             }
+            .ignoresSafeArea(.keyboard, edges: .bottom)
+            .sheet(isPresented: $showUpload) {
+                NavigationStack { UploadProductView() }
+            }
+    }
 
-            CustomTabBar(
-                selectedTab: $selectedTab,
-                onTapUpload: { showUpload = true }
-            )
-        }
-        .sheet(isPresented: $showUpload) {
-            NavigationStack { UploadProductView() }
+    @ViewBuilder
+    private var contentView: some View {
+        switch selectedTab {
+        case .home:
+            NavigationStack {
+                HomeView(
+                    onBrowseItems: { selectedTab = .search },
+                    onStartSelling: { showUpload = true }
+                )
+                .padding(.bottom, 88)
+            }
+        case .search:
+            NavigationStack { SearchView().padding(.bottom, 88) }
+        case .activity:
+            NavigationStack { ActivityView().padding(.bottom, 88) }
+        case .profile:
+            NavigationStack { ProfileView().padding(.bottom, 88) }
         }
     }
 }
@@ -72,7 +73,7 @@ struct CustomTabBar: View {
                 Spacer()
                 Color.clear.frame(width: 56)
                 Spacer()
-                tabButton(.listings, icon: "list.bullet")
+                tabButton(.activity, icon: "heart")
                 Spacer()
                 tabButton(.profile, icon: "person")
             }
@@ -96,9 +97,7 @@ struct CustomTabBar: View {
             }
             .offset(y: -18)
         }
-        .padding(.bottom, UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.windows.first?.safeAreaInsets.bottom ?? 0)
+        .padding(.bottom, 8)
     }
 
     private func tabButton(_ tab: MainTab, icon: String) -> some View {
