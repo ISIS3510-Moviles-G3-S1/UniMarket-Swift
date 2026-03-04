@@ -6,8 +6,8 @@
 import SwiftUI
 
 enum AppTheme {
-    static let accent = Color(hex: "7C9885")
-    static let accentAlt = Color(hex: "B5B682")
+    static let accent = Color(hex: "72A08A")
+    static let accentAlt = Color(hex: "B1B87D")
     static let background = Color(hex: "F2F2F2")
     static let primaryText = Color.black
     static let secondaryText = Color.black.opacity(0.6)
@@ -26,6 +26,7 @@ extension Font {
         .custom("Poppins-Bold", size: size)
     }
 }
+
 
 extension Color {
     init(hex: String) {

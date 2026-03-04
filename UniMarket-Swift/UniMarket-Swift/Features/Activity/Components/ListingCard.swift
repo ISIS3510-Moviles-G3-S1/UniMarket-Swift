@@ -21,9 +21,16 @@ struct ListingCard: View {
                             .fill(AppTheme.background)
                             .frame(height: 180)
                             .overlay(
-                                Image(systemName: listing.imageName)
+                                Image(listing.imageName)
+                                    .resizable()
                                     .font(.poppinsSemiBold(44))
                                     .foregroundStyle(AppTheme.secondaryText)
+                                    .scaledToFit()
+                                    .frame(height: 180) // adjust per design
+                                    .frame(maxWidth: .infinity)
+                                    .clipped()
+                                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                                
                             )
 
                         Text(listing.status.rawValue)

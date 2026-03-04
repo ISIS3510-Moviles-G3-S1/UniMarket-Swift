@@ -8,8 +8,11 @@
 import SwiftUI
 
 struct ProductDetailView: View {
+    @EnvironmentObject private var chatStore: ChatStore
+
     @StateObject private var vm: ProductDetailViewModel
     @State private var editingListing: Listing?
+    @State private var chatConversationID: String?
 
     private let onListingUpdated: ((Listing) -> Void)?
 
@@ -104,6 +107,11 @@ struct ProductDetailView: View {
                 }
             )
         }
+        .sheet(item: chatRouteBinding) { route in
+            NavigationStack {
+                ChatThreadView(conversationID: route.id)
+            }
+        }
     }
 
     private var imageHeader: some View {
@@ -112,9 +120,15 @@ struct ProductDetailView: View {
                 .fill(Color.white)
                 .frame(height: 280)
 
-            Image(systemName: vm.imageName)
+            Image(vm.imageName)
                 .font(.poppinsSemiBold(72))
                 .foregroundStyle(AppTheme.secondaryText)
+                .scaledToFit()
+                .frame(height: 280) // adjust per design
+                .frame(width: 300)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+
         }
     }
 
@@ -149,6 +163,12 @@ struct ProductDetailView: View {
                 .buttonStyle(.plain)
 
                 Button("Message") {
+                    chatConversationID = chatStore.startConversation(
+                        productID: vm.id,
+                        productTitle: vm.title,
+                        sellerName: vm.sellerName,
+                        productImageName: vm.imageName
+                    )
                 }
                 .font(.poppinsSemiBold(16))
                 .foregroundStyle(AppTheme.primaryText)
@@ -158,5 +178,21 @@ struct ProductDetailView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
         }
+    }
+
+    private struct ChatRoute: Identifiable {
+        let id: String
+    }
+
+    private var chatRouteBinding: Binding<ChatRoute?> {
+        Binding<ChatRoute?>(
+            get: {
+                guard let id = chatConversationID else { return nil }
+                return ChatRoute(id: id)
+            },
+            set: { newValue in
+                chatConversationID = newValue?.id
+            }
+        )
     }
 }

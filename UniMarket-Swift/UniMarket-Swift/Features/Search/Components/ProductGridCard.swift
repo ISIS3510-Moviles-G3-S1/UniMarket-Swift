@@ -19,9 +19,13 @@ struct ProductGridCard: View {
                     .fill(AppTheme.background)
                     .frame(height: 180)
                     .overlay(
-                        Image(systemName: product.imageName)
-                            .font(.poppinsSemiBold(40))
-                            .foregroundStyle(AppTheme.secondaryText)
+                        Image(product.imageName)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(height: 180)
+                            .frame(maxWidth: .infinity)
+                            .clipped()
+                            .clipShape(RoundedRectangle(cornerRadius: 18))
                     )
 
                 Text(product.conditionTag)

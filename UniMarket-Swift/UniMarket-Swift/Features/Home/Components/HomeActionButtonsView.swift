@@ -16,24 +16,24 @@ struct HomeActionButtonsView: View {
             Button("Browse Items") {
                 onBrowseItems()
             }
-            .font(.poppinsSemiBold(22))
+            .font(.poppinsSemiBold(15))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 18)
-            .background(AppTheme.accent)
+            .background(AppTheme.accentAlt)
             .foregroundStyle(.black)
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
             Button("Start Selling") {
                 onStartSelling()
             }
-            .font(.poppinsSemiBold(22))
+            .font(.poppinsSemiBold(15))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 18)
             .foregroundStyle(.black)
-            .background(AppTheme.accentAlt.opacity(0.55))
+            .background(AppTheme.background.opacity(0.55))
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(AppTheme.accent, lineWidth: 1.2)
             )
 
@@ -54,7 +54,7 @@ struct HomeActionButtonsView: View {
                 Text(title)
                     .font(.poppinsSemiBold(14))
             }
-            .foregroundStyle(.black)
+            .foregroundStyle(AppTheme.accent)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
             .background(.white)

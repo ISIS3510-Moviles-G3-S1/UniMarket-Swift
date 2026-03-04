@@ -16,8 +16,11 @@ struct ProfileHeaderCard: View {
                 Circle()
                     .fill(AppTheme.accent.opacity(0.25))
                     .frame(width: 56, height: 56)
-                Image(systemName: "person.fill")
-                    .foregroundStyle(AppTheme.accent)
+                Image("Profile")
+                    .resizable()
+                    .scaledToFit() // shows the full photo
+                    .frame(width: 56, height: 56)
+                    .clipShape(Circle())
             }
 
             VStack(alignment: .leading, spacing: 6) {

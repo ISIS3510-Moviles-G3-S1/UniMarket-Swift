@@ -27,7 +27,7 @@ struct SearchView: View {
                     HStack {
                         Text("Browse")
                             .font(.poppinsBold(30))
-                            .foregroundStyle(AppTheme.primaryText)
+                            .foregroundStyle(AppTheme.accent)
                         Spacer()
                         Text("UniMarket")
                             .font(.poppinsRegular(12))
@@ -41,7 +41,7 @@ struct SearchView: View {
                                 .foregroundStyle(AppTheme.secondaryText)
                             TextField("Search items...", text: $vm.query)
                                 .font(.poppinsRegular(15))
-                                .foregroundStyle(AppTheme.primaryText)
+                                .foregroundStyle(AppTheme.accent)
                         }
                         .padding(12)
                         .background(.white)
@@ -61,7 +61,7 @@ struct SearchView: View {
                             }
                         } label: {
                             ZStack(alignment: .topTrailing) {
-                                Image(systemName: "slider.horizontal.3")
+                                Image(systemName: "slider.horizontal.3") //filtros
                                     .frame(width: 44, height: 44)
                                     .background(.white)
                                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))

@@ -29,10 +29,10 @@ final class SearchViewModel: ObservableObject {
     @Published var maxPrice: Int = 0
 
     @Published var products: [Product] = [
-        Product(id: "1", title: "Striped Linen Shirt", price: 16, sellerName: "Kai O.", conditionTag: "Good", tags: ["tops", "linen", "casual"], rating: 4.6, isFavorite: false, imageName: "tshirt"),
-        Product(id: "2", title: "High-Waist Jeans", price: 28, sellerName: "Nora B.", conditionTag: "Good", tags: ["bottoms", "denim", "street"], rating: 4.4, isFavorite: false, imageName: "figure.walk"),
-        Product(id: "3", title: "Canvas Tote Bag", price: 12, sellerName: "Mila R.", conditionTag: "Like New", tags: ["bags", "campus", "minimal"], rating: 4.8, isFavorite: true, imageName: "bag"),
-        Product(id: "4", title: "Black & White Print", price: 9, sellerName: "Sam P.", conditionTag: "Good", tags: ["accessories", "print", "vintage"], rating: 4.2, isFavorite: false, imageName: "photo")
+        Product(id: "1", title: "Striped Linen Shirt", price: 16, sellerName: "Kai O.", conditionTag: "Good", tags: ["tops", "linen", "casual"], rating: 4.6, isFavorite: false, imageName: "Shirt"),
+        Product(id: "2", title: "High-Waist Jeans", price: 28, sellerName: "Nora B.", conditionTag: "Good", tags: ["bottoms", "denim", "street"], rating: 4.4, isFavorite: false, imageName: "Pants"),
+        Product(id: "3", title: "Canvas Tote Bag", price: 12, sellerName: "Mila R.", conditionTag: "Like New", tags: ["bags", "campus", "minimal"], rating: 4.8, isFavorite: true, imageName: "ToteBag"),
+        Product(id: "4", title: "Black & White Print", price: 9, sellerName: "Sam P.", conditionTag: "Good", tags: ["accessories", "print", "vintage"], rating: 4.2, isFavorite: false, imageName: "Puffer")
     ] {
         didSet {
             if oldValue.map(\ .id) != products.map(\ .id) {

@@ -18,11 +18,19 @@ struct HomeHeaderView: View {
                 .background(AppTheme.accent.opacity(0.24))
                 .clipShape(Capsule())
 
-            Text("Your Campus\nYour Closet.")
+            Text("Your Campus")
                 .font(.poppinsBold(48))
-                .foregroundStyle(.black)
+                .foregroundStyle(AppTheme.accent)
+                .multilineTextAlignment(.center)
+                .lineSpacing(0)
+            
+            Text("Your Closet")
+                .font(Font.poppinsBold(48))
+                .foregroundStyle(AppTheme.accentAlt)
                 .multilineTextAlignment(.center)
                 .lineSpacing(2)
+            
+            
 
             Text("Buy, sell, and swap second-hand clothes with students from your university. AI-powered tagging. Zero effort. Real impact.")
                 .font(.poppinsRegular(19))

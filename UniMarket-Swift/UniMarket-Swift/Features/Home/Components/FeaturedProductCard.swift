@@ -10,6 +10,7 @@ import SwiftUI
 struct FeaturedProductCard: View {
     var body: some View {
         ZStack(alignment: .topTrailing) {
+            
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(.white)
                 .frame(height: 320)
@@ -17,7 +18,14 @@ struct FeaturedProductCard: View {
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
                         .fill(AppTheme.background)
                         .padding(2)
+                    
                 )
+            Image("FeatureCard")
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 22))
+
 
             VStack(alignment: .trailing, spacing: 2) {
                 Text("$18")
@@ -27,12 +35,16 @@ struct FeaturedProductCard: View {
                 Text("Like New ✓")
                     .font(.poppinsSemiBold(14))
                     .foregroundStyle(.black.opacity(0.9))
+                
+                
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(AppTheme.accent)
+            .background(AppTheme.accentAlt)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .padding(14)
+            
+            
         }
     }
 }

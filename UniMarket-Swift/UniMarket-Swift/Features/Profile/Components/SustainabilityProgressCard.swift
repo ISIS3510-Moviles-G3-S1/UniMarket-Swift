@@ -26,7 +26,7 @@ struct SustainabilityProgressCard: View {
                         .font(.poppinsRegular(10))
                         .foregroundStyle(AppTheme.secondaryText)
                     Text(profile.levelTitle)
-                        .font(.poppinsSemiBold(20))
+                        .font(.poppinsSemiBold(15))
                         .foregroundStyle(AppTheme.primaryText)
                 }
                 Spacer()
@@ -35,7 +35,7 @@ struct SustainabilityProgressCard: View {
                         .font(.poppinsRegular(10))
                         .foregroundStyle(AppTheme.secondaryText)
                     Text(profile.nextLevelTitle)
-                        .font(.poppinsSemiBold(20))
+                        .font(.poppinsSemiBold(15))
                         .multilineTextAlignment(.trailing)
                         .foregroundStyle(AppTheme.primaryText)
                     Text("\(profile.xpToNext) XP to go")

@@ -79,9 +79,15 @@ struct ActivityView: View {
                                     .fill(AppTheme.background)
                                     .frame(width: 72, height: 72)
 
-                                Image(systemName: product.imageName)
-                                    .font(.poppinsSemiBold(24))
+                                Image(product.imageName)
+                                    .resizable()
+                                    .font(.poppinsSemiBold(44))
                                     .foregroundStyle(AppTheme.secondaryText)
+                                    .scaledToFit()
+                                    .frame(height: 72) // adjust per design
+                                    .frame(maxWidth: .infinity)
+                                    .clipped()
+                                    .clipShape(RoundedRectangle(cornerRadius: 18))
                             }
 
                             VStack(alignment: .leading, spacing: 4) {
