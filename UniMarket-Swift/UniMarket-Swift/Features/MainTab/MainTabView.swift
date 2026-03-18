@@ -43,7 +43,9 @@ struct MainTabView: View {
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .sheet(isPresented: $showUpload) {
-            NavigationStack { UploadProductView() }
+            NavigationStack { 
+                UploadProductView()
+            }
         }
         .onChange(of: selectedTab) { _, newTab in
             guard newTab == .profile else { return }
