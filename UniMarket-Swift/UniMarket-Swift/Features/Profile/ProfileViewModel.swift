@@ -24,7 +24,6 @@ final class ProfileViewModel: ObservableObject {
     @Published var selectedTab: Tab = .activity
     @Published var currentUser: User?
 
-    // Derived UI Model
     @Published var profile: UserProfile = UserProfile(
         name: "Loading...",
         university: "UniMarket Member",
@@ -42,7 +41,6 @@ final class ProfileViewModel: ObservableObject {
 
     @Published var ecoMessage = "Welcome! Start selling items to earn XP and unlock new levels."
 
-    // Mock Data - TODO: Replace with real db collection for activities
     @Published var activity: [String] = [
         "Nora liked your item \"Cream Knit Sweater\".",
         "You posted \"Vintage Levi's Denim Jacket\".",
@@ -115,7 +113,7 @@ final class ProfileViewModel: ObservableObject {
             .sink { [weak self] user in
                 guard let self else { return }
                 self.currentUser = user
-                guard let user = user else { return }
+                guard let user else { return }
 
                 self.seedImmutableFieldsOnLoginIfNeeded(user)
                 self.updateDisplayIdentityIfChanged(user)
@@ -126,11 +124,47 @@ final class ProfileViewModel: ObservableObject {
 
     @MainActor
     func onProfileTabSelected() async {
-        // Refresh dynamic profile fields every time Profile tab is selected.
         await AuthService.shared.fetchUser()
         guard let user = AuthService.shared.currentUser else { return }
-        applyDynamicFields(user)
-        updateDisplayIdentityIfChanged(user)
+
+        let levelInfo = calculateLevelInfo(xp: user.xpPoints)
+        var didChange = false
+
+        if profile.rating != user.ratingStars {
+            profile.rating = user.ratingStars
+            didChange = true
+        }
+        if profile.transactions != user.numTransactions {
+            profile.transactions = user.numTransactions
+            didChange = true
+        }
+        if profile.xp != user.xpPoints {
+            profile.xp = user.xpPoints
+            profile.levelTitle = levelInfo.title
+            profile.nextLevelTitle = levelInfo.nextTitle
+            profile.xpToNext = levelInfo.xpToNext
+            profile.levelMinXP = levelInfo.minXP
+            profile.levelMaxXP = levelInfo.maxXP
+            updateEcoMessage(xp: user.xpPoints)
+            didChange = true
+        }
+
+        let defaults = UserDefaults.standard
+        if didChange {
+            defaults.set(user.ratingStars, forKey: CacheKey.dynamicRating)
+            defaults.set(user.numTransactions, forKey: CacheKey.dynamicTransactions)
+            defaults.set(user.xpPoints, forKey: CacheKey.dynamicXP)
+        }
+
+        if defaults.string(forKey: CacheKey.cachedName) != user.displayName {
+            profile.name = user.displayName
+            defaults.set(user.displayName, forKey: CacheKey.cachedName)
+        }
+
+        if defaults.string(forKey: CacheKey.cachedProfilePic) != user.profilePic {
+            profile.profilePicURL = user.profilePic
+            defaults.set(user.profilePic, forKey: CacheKey.cachedProfilePic)
+        }
     }
 
     private func hydrateFromCache() {
@@ -224,13 +258,6 @@ final class ProfileViewModel: ObservableObject {
     }
 
     func calculateLevelInfo(xp: Int) -> (title: String, nextTitle: String, xpToNext: Int, minXP: Int, maxXP: Int) {
-        // Sustainability Levels Logic
-        // Level 1: 0-100 (Newcomer)
-        // Level 2: 101-300 (Eco Learner)
-        // Level 3: 301-600 (Eco Enthusiast)
-        // Level 4: 601-1000 (Eco Explorer)
-        // Level 5: 1001+ (Sustainability Star)
-
         switch xp {
         case 0..<100:
             return ("Level 1 - Newcomer", "Level 2 - Eco Learner", 100 - xp, 0, 100)
@@ -248,21 +275,52 @@ final class ProfileViewModel: ObservableObject {
     func updateEcoMessage(xp: Int) {
         let levelInfo = calculateLevelInfo(xp: xp)
         if xp >= 1000 {
-            self.ecoMessage = "You're a Sustainability Star! You've reached the top level. Keep leading the way!"
+            ecoMessage = "You're a Sustainability Star! You've reached the top level. Keep leading the way!"
         } else {
-            self.ecoMessage = "You're just \(levelInfo.xpToNext) XP away from \(levelInfo.nextTitle). Keep it up to unlock new badges and rewards!"
+            ecoMessage = "You're just \(levelInfo.xpToNext) XP away from \(levelInfo.nextTitle). Keep it up to unlock new badges and rewards!"
         }
+    }
+
+    private func versionedProfileImageKey(from urlString: String) -> String {
+        let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+        let separator = trimmed.contains("?") ? "&" : "?"
+        return "\(trimmed)\(separator)v=\(Int(Date().timeIntervalSince1970))"
     }
 
     func uploadProfileImage(_ image: UIImage) async {
         do {
-            let url = try await ImageUploadService.uploadProfilePic(image)
-            try await AuthService.shared.updateProfileImage(withImageUrl: url)
+            let uploadedURL = try await ImageUploadService.uploadProfilePic(image)
+            let previousCacheKey = profile.profilePicURL
 
-            profile.profilePicURL = url
-            UserDefaults.standard.set(url, forKey: CacheKey.cachedProfilePic)
+            try await AuthService.shared.updateProfileImage(withImageUrl: uploadedURL)
+
+            if !previousCacheKey.isEmpty {
+                AsyncImageView.invalidateCache(for: previousCacheKey)
+            }
+            AsyncImageView.invalidateCache(for: uploadedURL)
+
+            let versionedURL = versionedProfileImageKey(from: uploadedURL)
+            profile.profilePicURL = versionedURL
+            UserDefaults.standard.set(versionedURL, forKey: CacheKey.cachedProfilePic)
         } catch {
             print("DEBUG: Failed to upload profile image with error \(error.localizedDescription)")
+        }
+    }
+
+    func deleteProfileImage() async {
+        do {
+            let previousCacheKey = profile.profilePicURL
+            try await AuthService.shared.updateProfileImage(withImageUrl: "")
+
+            if !previousCacheKey.isEmpty {
+                AsyncImageView.invalidateCache(for: previousCacheKey)
+            }
+
+            profile.profilePicURL = ""
+            UserDefaults.standard.set("", forKey: CacheKey.cachedProfilePic)
+        } catch {
+            print("DEBUG: Failed to delete profile image with error \(error.localizedDescription)")
         }
     }
 

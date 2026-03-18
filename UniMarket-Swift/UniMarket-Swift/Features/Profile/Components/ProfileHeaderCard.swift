@@ -14,11 +14,11 @@ struct ProfileHeaderCard: View {
     var body: some View {
         HStack(spacing: 14) {
             ZStack(alignment: .bottomTrailing) {
-                AsyncImageView(urlString: profile.profilePicURL)
+                AsyncImageView(urlString: profile.profilePicURL, cacheKey: profile.profilePicURL)
                     .frame(width: 56, height: 56)
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 1))
-                
+
                 Button(action: onEditImage) {
                     Image(systemName: "pencil.circle.fill")
                         .symbolRenderingMode(.multicolor)

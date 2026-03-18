@@ -112,6 +112,11 @@ struct ProfileView: View {
                 imageSource = .photoLibrary
                 showImagePicker = true
             }
+            Button("Delete Picture", role: .destructive) {
+                Task {
+                    await vm.deleteProfileImage()
+                }
+            }
             Button("Cancel", role: .cancel) {}
         }
         .sheet(isPresented: $showImagePicker) {
