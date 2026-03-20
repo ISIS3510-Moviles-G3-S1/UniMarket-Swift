@@ -31,7 +31,14 @@ struct ProfileView: View {
                         .foregroundStyle(AppTheme.accent)
                         .padding(.horizontal)
 
-                    ProfileHeaderCard(profile: vm.profile) {
+                    ProfileHeaderCard(
+                        displayName: vm.displayName,
+                        memberSince: vm.memberSince,
+                        rating: vm.rating,
+                        transactions: vm.transactions,
+                        xp: vm.xp,
+                        profilePicURL: vm.profilePicURL
+                    ) {
                         showImageSourceSelection = true
                     }
                     .padding(.horizontal)
@@ -41,7 +48,7 @@ struct ProfileView: View {
                     EcoSaysCard(message: vm.ecoMessage)
                         .padding(.horizontal)
 
-                    SustainabilityProgressCard(profile: vm.profile)
+                    SustainabilityProgressCard(xp: vm.xp, xpToNext: vm.xpToNext)
                         .padding(.horizontal)
 
                     // TODO: Implement Recent Activity DB Integration

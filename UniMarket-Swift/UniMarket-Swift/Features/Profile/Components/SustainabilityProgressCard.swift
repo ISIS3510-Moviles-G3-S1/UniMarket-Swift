@@ -8,12 +8,17 @@
 import SwiftUI
 
 struct SustainabilityProgressCard: View {
-    let profile: UserProfile
+    let xp: Int
+    let xpToNext: Int
+
+    private var levelInfo: (title: String, nextTitle: String, xpToNext: Int, minXP: Int, maxXP: Int) {
+        calculateLevelInfo(xp: xp)
+    }
 
     private var progress: Double {
-        let minXP = Double(profile.levelMinXP)
-        let maxXP = Double(profile.levelMaxXP)
-        let current = Double(profile.xp)
+        let minXP = Double(levelInfo.minXP)
+        let maxXP = Double(levelInfo.maxXP)
+        let current = Double(xp)
         let clamped = max(min(current, maxXP), minXP)
         return (clamped - minXP) / (maxXP - minXP)
     }
@@ -25,7 +30,7 @@ struct SustainabilityProgressCard: View {
                     Text("SUSTAINABILITY LEVEL")
                         .font(.poppinsRegular(10))
                         .foregroundStyle(AppTheme.secondaryText)
-                    Text(profile.levelTitle)
+                    Text(levelInfo.title)
                         .font(.poppinsSemiBold(15))
                         .foregroundStyle(AppTheme.primaryText)
                 }
@@ -34,11 +39,11 @@ struct SustainabilityProgressCard: View {
                     Text("Next up")
                         .font(.poppinsRegular(10))
                         .foregroundStyle(AppTheme.secondaryText)
-                    Text(profile.nextLevelTitle)
+                    Text(levelInfo.nextTitle)
                         .font(.poppinsSemiBold(15))
                         .multilineTextAlignment(.trailing)
                         .foregroundStyle(AppTheme.primaryText)
-                    Text("\(profile.xpToNext) XP to go")
+                    Text("\(xpToNext) XP to go")
                         .font(.poppinsRegular(12))
                         .foregroundStyle(AppTheme.secondaryText)
                 }
@@ -58,12 +63,12 @@ struct SustainabilityProgressCard: View {
             .frame(height: 12)
 
             HStack {
-                Text("\(profile.levelMinXP) XP")
+                Text("\(levelInfo.minXP) XP")
                 Spacer()
-                Text("\(profile.xp) XP")
+                Text("\(xp) XP")
                     .font(.poppinsSemiBold(12))
                 Spacer()
-                Text("\(profile.levelMaxXP) XP")
+                Text("\(levelInfo.maxXP) XP")
             }
             .font(.poppinsRegular(12))
             .foregroundStyle(AppTheme.secondaryText)
@@ -74,5 +79,20 @@ struct SustainabilityProgressCard: View {
                 .fill(.white)
                 .shadow(color: .black.opacity(0.08), radius: 6)
         )
+    }
+
+    private func calculateLevelInfo(xp: Int) -> (title: String, nextTitle: String, xpToNext: Int, minXP: Int, maxXP: Int) {
+        switch xp {
+        case 0..<100:
+            return ("Level 1 - Newcomer", "Level 2 - Eco Learner", 100 - xp, 0, 100)
+        case 100..<300:
+            return ("Level 2 - Eco Learner", "Level 3 - Eco Enthusiast", 300 - xp, 100, 300)
+        case 300..<600:
+            return ("Level 3 - Eco Enthusiast", "Level 4 - Eco Explorer", 600 - xp, 300, 600)
+        case 600..<1000:
+            return ("Level 4 - Eco Explorer", "Level 5 - Sustainability Star", 1000 - xp, 600, 1000)
+        default:
+            return ("Level 5 - Sustainability Star", "Max Level", 0, 1000, 10000)
+        }
     }
 }

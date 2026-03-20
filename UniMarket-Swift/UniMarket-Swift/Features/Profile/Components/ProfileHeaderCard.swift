@@ -8,13 +8,18 @@
 import SwiftUI
 
 struct ProfileHeaderCard: View {
-    let profile: UserProfile
+    let displayName: String
+    let memberSince: String
+    let rating: Double
+    let transactions: Int
+    let xp: Int
+    let profilePicURL: String
     let onEditImage: () -> Void
 
     var body: some View {
         HStack(spacing: 14) {
             ZStack(alignment: .bottomTrailing) {
-                AsyncImageView(urlString: profile.profilePicURL, cacheKey: profile.profilePicURL)
+                AsyncImageView(urlString: profilePicURL, cacheKey: profilePicURL)
                     .frame(width: 56, height: 56)
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 1))
@@ -30,28 +35,28 @@ struct ProfileHeaderCard: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text(profile.name)
+                Text(displayName)
                     .font(.poppinsSemiBold(20))
                     .foregroundStyle(AppTheme.primaryText)
 
-                Text("\(profile.university) • Member since \(profile.memberSince)")
+                Text("Member since \(memberSince)")
                     .font(.poppinsRegular(12))
                     .foregroundStyle(AppTheme.secondaryText)
 
                 HStack(spacing: 10) {
                     HStack(spacing: 4) {
                         Image(systemName: "star.fill")
-                        Text(String(format: "%.1f", profile.rating))
+                        Text(String(format: "%.1f", rating))
                     }
                     .font(.poppinsRegular(12))
                     .foregroundStyle(AppTheme.secondaryText)
 
-                    Text("• \(profile.transactions) transactions")
+                    Text("• \(transactions) transactions")
                         .font(.poppinsRegular(12))
                         .foregroundStyle(AppTheme.secondaryText)
                 }
 
-                Text("\(profile.xp) XP Points")
+                Text("\(xp) XP Points")
                     .font(.poppinsSemiBold(15))
                     .foregroundStyle(AppTheme.accent)
                     .padding(.top, 2)
