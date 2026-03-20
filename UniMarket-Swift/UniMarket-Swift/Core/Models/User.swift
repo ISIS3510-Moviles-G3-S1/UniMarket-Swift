@@ -4,7 +4,6 @@ import FirebaseFirestore
 struct User: Identifiable, Codable {
     let id: String
     let displayName: String
-    let email: String
     let createdAt: Date
     let isVerified: Bool
     let numTransactions: Int
@@ -15,7 +14,6 @@ struct User: Identifiable, Codable {
     enum CodingKeys: String, CodingKey {
         case id = "uid"
         case displayName
-        case email
         case createdAt
         case isVerified
         case numTransactions

@@ -24,20 +24,13 @@ final class ProfileViewModel: ObservableObject {
     @Published var selectedTab: Tab = .activity
     @Published var currentUser: User?
 
-    @Published var profile: UserProfile = UserProfile(
-        name: "Loading...",
-        university: "UniMarket Member",
-        memberSince: "...",
-        rating: 0,
-        transactions: 0,
-        xp: 0,
-        levelTitle: "Level 1",
-        nextLevelTitle: "Level 2",
-        xpToNext: 100,
-        levelMinXP: 0,
-        levelMaxXP: 100,
-        profilePicURL: ""
-    )
+    @Published var displayName: String = "Loading..."
+    @Published var memberSince: String = "..."
+    @Published var rating: Double = 0
+    @Published var transactions: Int = 0
+    @Published var xp: Int = 0
+    @Published var xpToNext: Int = 100
+    @Published var profilePicURL: String = ""
 
     @Published var ecoMessage = "Welcome! Start selling items to earn XP and unlock new levels."
 
@@ -97,7 +90,6 @@ final class ProfileViewModel: ObservableObject {
         static let dynamicXP = "profile.dynamic.xp"
         static let cachedName = "profile.cached.name"
         static let cachedProfilePic = "profile.cached.profilePic"
-        static let cachedUniversity = "profile.cached.university"
         static let cachedMemberSince = "profile.cached.memberSince"
         static let staticSeedUID = "profile.static.seed.uid"
     }
@@ -130,21 +122,17 @@ final class ProfileViewModel: ObservableObject {
         let levelInfo = calculateLevelInfo(xp: user.xpPoints)
         var didChange = false
 
-        if profile.rating != user.ratingStars {
-            profile.rating = user.ratingStars
+        if rating != user.ratingStars {
+            rating = user.ratingStars
             didChange = true
         }
-        if profile.transactions != user.numTransactions {
-            profile.transactions = user.numTransactions
+        if transactions != user.numTransactions {
+            transactions = user.numTransactions
             didChange = true
         }
-        if profile.xp != user.xpPoints {
-            profile.xp = user.xpPoints
-            profile.levelTitle = levelInfo.title
-            profile.nextLevelTitle = levelInfo.nextTitle
-            profile.xpToNext = levelInfo.xpToNext
-            profile.levelMinXP = levelInfo.minXP
-            profile.levelMaxXP = levelInfo.maxXP
+        if xp != user.xpPoints {
+            xp = user.xpPoints
+            xpToNext = levelInfo.xpToNext
             updateEcoMessage(xp: user.xpPoints)
             didChange = true
         }
@@ -157,12 +145,12 @@ final class ProfileViewModel: ObservableObject {
         }
 
         if defaults.string(forKey: CacheKey.cachedName) != user.displayName {
-            profile.name = user.displayName
+            displayName = user.displayName
             defaults.set(user.displayName, forKey: CacheKey.cachedName)
         }
 
         if defaults.string(forKey: CacheKey.cachedProfilePic) != user.profilePic {
-            profile.profilePicURL = user.profilePic
+            profilePicURL = user.profilePic
             defaults.set(user.profilePic, forKey: CacheKey.cachedProfilePic)
         }
     }
@@ -170,43 +158,25 @@ final class ProfileViewModel: ObservableObject {
     private func hydrateFromCache() {
         let defaults = UserDefaults.standard
 
-        let cachedName = defaults.string(forKey: CacheKey.cachedName) ?? "Loading..."
-        let cachedUniversity = defaults.string(forKey: CacheKey.cachedUniversity) ?? "UniMarket Member"
-        let cachedMemberSince = defaults.string(forKey: CacheKey.cachedMemberSince) ?? "..."
-        let cachedProfilePic = defaults.string(forKey: CacheKey.cachedProfilePic) ?? ""
+        displayName = defaults.string(forKey: CacheKey.cachedName) ?? "Loading..."
+        memberSince = defaults.string(forKey: CacheKey.cachedMemberSince) ?? "..."
+        profilePicURL = defaults.string(forKey: CacheKey.cachedProfilePic) ?? ""
 
-        let cachedRating = defaults.double(forKey: CacheKey.dynamicRating)
-        let cachedTransactions = defaults.integer(forKey: CacheKey.dynamicTransactions)
-        let cachedXP = defaults.integer(forKey: CacheKey.dynamicXP)
+        rating = defaults.double(forKey: CacheKey.dynamicRating)
+        transactions = defaults.integer(forKey: CacheKey.dynamicTransactions)
+        xp = defaults.integer(forKey: CacheKey.dynamicXP)
 
-        let levelInfo = calculateLevelInfo(xp: cachedXP)
-        profile = UserProfile(
-            name: cachedName,
-            university: cachedUniversity,
-            memberSince: cachedMemberSince,
-            rating: cachedRating,
-            transactions: cachedTransactions,
-            xp: cachedXP,
-            levelTitle: levelInfo.title,
-            nextLevelTitle: levelInfo.nextTitle,
-            xpToNext: levelInfo.xpToNext,
-            levelMinXP: levelInfo.minXP,
-            levelMaxXP: levelInfo.maxXP,
-            profilePicURL: cachedProfilePic
-        )
-        updateEcoMessage(xp: cachedXP)
+        let levelInfo = calculateLevelInfo(xp: xp)
+        xpToNext = levelInfo.xpToNext
+        updateEcoMessage(xp: xp)
     }
 
     private func applyDynamicFields(_ user: User) {
         let levelInfo = calculateLevelInfo(xp: user.xpPoints)
-        profile.rating = user.ratingStars
-        profile.transactions = user.numTransactions
-        profile.xp = user.xpPoints
-        profile.levelTitle = levelInfo.title
-        profile.nextLevelTitle = levelInfo.nextTitle
-        profile.xpToNext = levelInfo.xpToNext
-        profile.levelMinXP = levelInfo.minXP
-        profile.levelMaxXP = levelInfo.maxXP
+        rating = user.ratingStars
+        transactions = user.numTransactions
+        xp = user.xpPoints
+        xpToNext = levelInfo.xpToNext
 
         let defaults = UserDefaults.standard
         defaults.set(user.ratingStars, forKey: CacheKey.dynamicRating)
@@ -220,12 +190,12 @@ final class ProfileViewModel: ObservableObject {
         let defaults = UserDefaults.standard
 
         if defaults.string(forKey: CacheKey.cachedName) != user.displayName {
-            profile.name = user.displayName
+            displayName = user.displayName
             defaults.set(user.displayName, forKey: CacheKey.cachedName)
         }
 
         if defaults.string(forKey: CacheKey.cachedProfilePic) != user.profilePic {
-            profile.profilePicURL = user.profilePic
+            profilePicURL = user.profilePic
             defaults.set(user.profilePic, forKey: CacheKey.cachedProfilePic)
         }
     }
@@ -235,25 +205,19 @@ final class ProfileViewModel: ObservableObject {
         let lastSeedUID = defaults.string(forKey: CacheKey.staticSeedUID)
 
         guard lastSeedUID != user.id else {
-            if let university = defaults.string(forKey: CacheKey.cachedUniversity) {
-                profile.university = university
-            }
-            if let memberSince = defaults.string(forKey: CacheKey.cachedMemberSince) {
-                profile.memberSince = memberSince
+            if let cachedMemberSince = defaults.string(forKey: CacheKey.cachedMemberSince) {
+                memberSince = cachedMemberSince
             }
             return
         }
 
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "MMM yyyy"
-        let memberSince = dateFormatter.string(from: user.createdAt)
-        let university = user.email.split(separator: "@").last.map(String.init) ?? "UniMarket University"
+        let formattedMemberSince = dateFormatter.string(from: user.createdAt)
 
-        profile.university = university
-        profile.memberSince = memberSince
+        memberSince = formattedMemberSince
 
-        defaults.set(university, forKey: CacheKey.cachedUniversity)
-        defaults.set(memberSince, forKey: CacheKey.cachedMemberSince)
+        defaults.set(formattedMemberSince, forKey: CacheKey.cachedMemberSince)
         defaults.set(user.id, forKey: CacheKey.staticSeedUID)
     }
 
@@ -291,7 +255,7 @@ final class ProfileViewModel: ObservableObject {
     func uploadProfileImage(_ image: UIImage) async {
         do {
             let uploadedURL = try await ImageUploadService.uploadProfilePic(image)
-            let previousCacheKey = profile.profilePicURL
+            let previousCacheKey = profilePicURL
 
             try await AuthService.shared.updateProfileImage(withImageUrl: uploadedURL)
 
@@ -301,7 +265,7 @@ final class ProfileViewModel: ObservableObject {
             AsyncImageView.invalidateCache(for: uploadedURL)
 
             let versionedURL = versionedProfileImageKey(from: uploadedURL)
-            profile.profilePicURL = versionedURL
+            profilePicURL = versionedURL
             UserDefaults.standard.set(versionedURL, forKey: CacheKey.cachedProfilePic)
         } catch {
             print("DEBUG: Failed to upload profile image with error \(error.localizedDescription)")
@@ -310,14 +274,14 @@ final class ProfileViewModel: ObservableObject {
 
     func deleteProfileImage() async {
         do {
-            let previousCacheKey = profile.profilePicURL
+            let previousCacheKey = profilePicURL
             try await AuthService.shared.updateProfileImage(withImageUrl: "")
 
             if !previousCacheKey.isEmpty {
                 AsyncImageView.invalidateCache(for: previousCacheKey)
             }
 
-            profile.profilePicURL = ""
+            profilePicURL = ""
             UserDefaults.standard.set("", forKey: CacheKey.cachedProfilePic)
         } catch {
             print("DEBUG: Failed to delete profile image with error \(error.localizedDescription)")

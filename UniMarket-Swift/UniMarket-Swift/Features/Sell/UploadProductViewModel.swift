@@ -1,10 +1,3 @@
-//
-//  UploadProductViewModel.swift
-//  UniMarket-Swift
-//
-//  Created by Mariana Pineda on 1/03/26.
-//
-
 import SwiftUI
 import PhotosUI
 import Combine
@@ -15,7 +8,6 @@ import UIKit
 
 final class UploadProductViewModel: ObservableObject {
     @Published var selectedItems: [PhotosPickerItem] = []
-
     @Published var selectedImages: [Image] = []
     @Published var imagesData: [Data] = []
 
@@ -30,7 +22,6 @@ final class UploadProductViewModel: ObservableObject {
     func loadSelectedPhotos() async {
         errorMessage = nil
 
-        // Limpia previews anteriores (solo las de galería; mantiene las de cámara si quieres)
         await MainActor.run {
             selectedImages = []
             imagesData = []
@@ -47,38 +38,34 @@ final class UploadProductViewModel: ObservableObject {
                             selectedImages.append(swiftUIImage)
                         }
                     } else {
-                        await MainActor.run { errorMessage = "No se pudo leer una imagen." }
+                        await MainActor.run { errorMessage = "Could not read one of the images." }
                     }
                     #else
                     await MainActor.run { imagesData.append(data) }
                     #endif
                 }
             } catch {
-                await MainActor.run { errorMessage = "Error cargando una de las fotos." }
+                await MainActor.run { errorMessage = "Error loading one of the photos." }
             }
         }
     }
 
     func addImageFromCamera(_ uiImage: UIImage) {
-        // agrega una foto tomada con cámara (máx 5)
         guard selectedImages.count < 5 else {
-            errorMessage = "Máximo 5 fotos."
+            errorMessage = "Maximum 5 photos."
             return
         }
-
         if let data = uiImage.jpegData(compressionQuality: 0.85) {
             imagesData.append(data)
             selectedImages.append(Image(uiImage: uiImage))
         } else {
-            errorMessage = "No se pudo procesar la foto."
+            errorMessage = "Could not process the photo."
         }
     }
 
     func removeImage(at index: Int) {
         if index < selectedImages.count { selectedImages.remove(at: index) }
         if index < imagesData.count { imagesData.remove(at: index) }
-
-        // intenta mantener consistente con selectedItems (si venían de galería)
         if index < selectedItems.count { selectedItems.remove(at: index) }
     }
 
@@ -88,23 +75,46 @@ final class UploadProductViewModel: ObservableObject {
         Int(price) != nil
     }
 
-    func postMock() async {
-        guard canPost else { return }
-        await MainActor.run { isPosting = true }
-        defer { Task { await MainActor.run { self.isPosting = false } } }
-
-        try? await Task.sleep(nanoseconds: 900_000_000)
+    func postProduct(using productStore: ProductStore) async -> Bool {
+        guard canPost, let parsedPrice = Int(price) else { return false }
 
         await MainActor.run {
-            selectedItems = []
-            selectedImages = []
-            imagesData = []
-            title = ""
-            price = ""
-            condition = "Good"
-            description = ""
+            isPosting = true
             errorMessage = nil
         }
+
+        defer {
+            Task { @MainActor in self.isPosting = false }
+        }
+
+        do {
+            let input = CreateProductInput(
+                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                price: parsedPrice,
+                conditionTag: condition,
+                description: description.trimmingCharacters(in: .whitespacesAndNewlines),
+                imagesData: imagesData
+            )
+
+            _ = try await productStore.createProduct(input: input)
+            await MainActor.run { resetForm() }
+            return true
+        } catch {
+            await MainActor.run { errorMessage = error.localizedDescription }
+            return false
+        }
+    }
+
+    @MainActor
+    private func resetForm() {
+        selectedItems = []
+        selectedImages = []
+        imagesData = []
+        title = ""
+        price = ""
+        condition = "Good"
+        description = ""
+        errorMessage = nil
     }
 }
 
