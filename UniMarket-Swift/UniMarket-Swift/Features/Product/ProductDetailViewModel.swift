@@ -11,7 +11,7 @@ import Combine
 final class ProductDetailViewModel: ObservableObject {
     let id: String
     let sellerName: String
-    let imageURL: String?
+    let imageURLs: [String]
     let rating: Double?
     let description: String
     let isOwnListing: Bool
@@ -27,7 +27,16 @@ final class ProductDetailViewModel: ObservableObject {
         self.id = product.id
         self.title = product.title
         self.price = product.price
-        self.imageURL = product.primaryImageURL
+        let urls = product.imageURLs
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if !urls.isEmpty {
+            self.imageURLs = urls
+        } else if let fallback = product.imagePath?.trimmingCharacters(in: .whitespacesAndNewlines), !fallback.isEmpty {
+            self.imageURLs = [fallback]
+        } else {
+            self.imageURLs = []
+        }
         self.sellerName = product.sellerName
         self.conditionText = isOwnListing ? product.status.rawValue : product.conditionTag
         self.rating = isOwnListing ? nil : product.rating

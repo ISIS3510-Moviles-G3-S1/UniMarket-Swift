@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import FirebaseAuth
 import FirebaseFirestore
+import FirebaseStorage
 import UIKit
 
 struct CreateProductInput {
@@ -129,11 +130,33 @@ final class ProductService {
     }
 
     func deleteProduct(_ product: Product) async throws {
-        try await db.collection(collectionName).document(product.id).delete()
+        var storageTargets = Set<String>()
 
-        for imageURL in product.imageURLs where !imageURL.isEmpty {
-            try? await ImageUploadService.deleteImage(at: imageURL)
+        // Prefer direct storage paths when available; they avoid URL parsing.
+        if let imagePath = product.imagePath?.trimmingCharacters(in: .whitespacesAndNewlines), !imagePath.isEmpty {
+            storageTargets.insert(imagePath)
         }
+
+        for rawValue in product.imageURLs {
+            let candidate = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !candidate.isEmpty else { continue }
+            storageTargets.insert(candidate)
+        }
+
+        for target in storageTargets {
+            let ref: StorageReference
+            if target.hasPrefix("http://") || target.hasPrefix("https://") {
+                guard URL(string: target) != nil else {
+                    throw ProductServiceError.invalidStorageURL(target)
+                }
+                ref = Storage.storage().reference(forURL: target)
+            } else {
+                ref = Storage.storage().reference(withPath: target)
+            }
+            try await ref.delete()
+        }
+
+        try await db.collection(collectionName).document(product.id).delete()
     }
 
     private func resolvedSellerName(from user: FirebaseAuth.User) -> String {
@@ -288,6 +311,7 @@ final class ProductStore: ObservableObject {
 enum ProductServiceError: LocalizedError {
     case notAuthenticated
     case invalidProductData
+    case invalidStorageURL(String)
 
     var errorDescription: String? {
         switch self {
@@ -295,6 +319,8 @@ enum ProductServiceError: LocalizedError {
             return "You must be logged in to publish a product."
         case .invalidProductData:
             return "The product could not be loaded after saving."
+        case .invalidStorageURL(let value):
+            return "One of the listing images has an invalid URL: \(value)"
         }
     }
 }
