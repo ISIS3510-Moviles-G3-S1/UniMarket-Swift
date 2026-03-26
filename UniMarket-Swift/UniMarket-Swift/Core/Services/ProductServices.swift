@@ -130,32 +130,22 @@ final class ProductService {
     }
 
     func deleteProduct(_ product: Product) async throws {
-        var storageTargets = Set<String>()
-
-        // Prefer direct storage paths when available; they avoid URL parsing.
-        if let imagePath = product.imagePath?.trimmingCharacters(in: .whitespacesAndNewlines), !imagePath.isEmpty {
-            storageTargets.insert(imagePath)
-        }
-
+        // Delete all images from Storage
         for rawValue in product.imageURLs {
             let candidate = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !candidate.isEmpty else { continue }
-            storageTargets.insert(candidate)
-        }
 
-        for target in storageTargets {
-            let ref: StorageReference
-            if target.hasPrefix("http://") || target.hasPrefix("https://") {
-                guard URL(string: target) != nil else {
-                    throw ProductServiceError.invalidStorageURL(target)
-                }
-                ref = Storage.storage().reference(forURL: target)
-            } else {
-                ref = Storage.storage().reference(withPath: target)
+            do {
+                // Parse the storage path out of the download URL instead
+                let ref = try storageReference(from: candidate)
+                try await ref.delete()
+                print("DEBUG: Successfully deleted image at \(candidate)")
+            } catch {
+                print("DEBUG: Image delete failed: \(error.localizedDescription)")
             }
-            try await ref.delete()
         }
 
+        // Delete Firestore document
         try await db.collection(collectionName).document(product.id).delete()
     }
 
@@ -204,6 +194,21 @@ final class ProductService {
         }
     }
 
+    private func storageReference(from downloadURL: String) throws -> StorageReference {
+        guard
+            let url = URL(string: downloadURL),
+            let encodedPath = url.pathComponents
+                .drop(while: { $0 != "o" })  // find the "o" segment in the URL
+                .dropFirst()                  // drop the "o" itself
+                .first,
+            let path = encodedPath.removingPercentEncoding
+        else {
+            throw ProductServiceError.invalidStorageURL(downloadURL)
+        }
+
+        return Storage.storage().reference(withPath: path)
+    }
+    
     private static func makeProduct(from document: DocumentSnapshot) -> Product? {
         let data = document.data() ?? [:]
 

@@ -78,8 +78,11 @@ struct ActivityView: View {
             titleVisibility: .visible
         ) {
             Button("Delete", role: .destructive) {
+                // Capture product synchronously RIGHT HERE before dialog dismisses
+                let productToDelete = listingPendingDelete
+                listingPendingDelete = nil
                 Task {
-                    await deleteListing()
+                    await deleteListing(product: productToDelete)
                 }
             }
             Button("Cancel", role: .cancel) {
@@ -207,13 +210,12 @@ struct ActivityView: View {
     }
 
     @MainActor
-    private func deleteListing() async {
-        guard let product = listingPendingDelete else { return }
+    private func deleteListing(product: Product?) async {
+        guard let product else { return }
 
         do {
             try await productStore.deleteProduct(product)
             vm.deleteListing(product)
-            listingPendingDelete = nil
         } catch {
             deleteErrorMessage = error.localizedDescription
         }
