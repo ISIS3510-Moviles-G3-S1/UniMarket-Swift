@@ -120,7 +120,7 @@ struct ActivityView: View {
                                     .frame(width: 72, height: 72)
 
                                 if let imageURL = product.primaryImageURL, !imageURL.isEmpty {
-                                    AsyncImageView(urlString: imageURL, cacheKey: imageURL)
+                                    CachedRemoteImageView(urlString: imageURL, cacheKey: imageURL)
                                         .frame(width: 72, height: 72)
                                         .clipShape(RoundedRectangle(cornerRadius: 18))
                                 } else {

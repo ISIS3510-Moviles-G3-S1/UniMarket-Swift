@@ -19,7 +19,7 @@ struct ProfileHeaderCard: View {
     var body: some View {
         HStack(spacing: 14) {
             ZStack(alignment: .bottomTrailing) {
-                AsyncImageView(urlString: profilePicURL, cacheKey: profilePicURL)
+                CachedRemoteImageView(urlString: profilePicURL, cacheKey: profilePicURL, placeholderStyle: .profile)
                     .frame(width: 56, height: 56)
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 1))

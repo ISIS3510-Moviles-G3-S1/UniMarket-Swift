@@ -345,9 +345,9 @@ final class ProfileViewModel: ObservableObject {
             try await AuthService.shared.updateProfileImage(withImageUrl: uploadedURL)
             
             if !previousCacheKey.isEmpty {
-                AsyncImageView.invalidateCache(for: previousCacheKey)
+                CachedRemoteImageView.invalidateCache(for: previousCacheKey)
             }
-            AsyncImageView.invalidateCache(for: uploadedURL)
+            CachedRemoteImageView.invalidateCache(for: uploadedURL)
             
             let versionedURL = versionedProfileImageKey(from: uploadedURL)
             profilePicURL = versionedURL
@@ -363,7 +363,7 @@ final class ProfileViewModel: ObservableObject {
             try await AuthService.shared.updateProfileImage(withImageUrl: "")
             
             if !previousCacheKey.isEmpty {
-                AsyncImageView.invalidateCache(for: previousCacheKey)
+                CachedRemoteImageView.invalidateCache(for: previousCacheKey)
             }
             
             profilePicURL = ""

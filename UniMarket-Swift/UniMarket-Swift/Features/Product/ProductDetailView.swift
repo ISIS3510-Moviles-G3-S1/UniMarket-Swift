@@ -142,7 +142,7 @@ struct ProductDetailView: View {
             } else {
                 TabView {
                     ForEach(vm.imageURLs, id: \.self) { imageURL in
-                        AsyncImageView(urlString: imageURL, cacheKey: imageURL)
+                        CachedRemoteImageView(urlString: imageURL, cacheKey: imageURL)
                             .frame(height: 280)
                             .frame(width: 300)
                             .clipped()

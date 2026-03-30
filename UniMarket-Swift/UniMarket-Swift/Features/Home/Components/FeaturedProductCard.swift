@@ -73,7 +73,7 @@ struct FeaturedProductCard: View {
             } else {
                 TabView {
                     ForEach(carouselImageURLs, id: \.self) { imageURL in
-                        AsyncImageView(urlString: imageURL, cacheKey: imageURL)
+                        CachedRemoteImageView(urlString: imageURL, cacheKey: imageURL)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .clipped()
                     }
