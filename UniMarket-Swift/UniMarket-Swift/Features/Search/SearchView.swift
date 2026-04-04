@@ -38,6 +38,14 @@ struct SearchView: View {
                     }
                     .padding(.horizontal)
 
+                    Picker("", selection: $vm.selectedSection) {
+                        ForEach(SearchViewModel.SearchSection.allCases) { section in
+                            Text(section.rawValue).tag(section)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal)
+
                     HStack(spacing: 10) {
                         HStack(spacing: 8) {
                             Image(systemName: "magnifyingglass")
@@ -45,6 +53,9 @@ struct SearchView: View {
                             TextField("Search items...", text: $vm.query)
                                 .font(.poppinsRegular(15))
                                 .foregroundStyle(AppTheme.accent)
+                                .onSubmit {
+                                    vm.saveCurrentQueryIfNeeded()
+                                }
                         }
                         .padding(12)
                         .background(.white)
@@ -85,55 +96,28 @@ struct SearchView: View {
                     .foregroundStyle(AppTheme.primaryText)
                     .padding(.horizontal)
 
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            tagChip(label: "All", isSelected: vm.selectedTag == nil) {
-                                vm.selectTag(nil)
-                            }
-
-                            ForEach(vm.availableTags, id: \.self) { tag in
-                                tagChip(label: tag.capitalized, isSelected: vm.selectedTag == tag) {
-                                    vm.selectTag(tag)
+                    if vm.selectedSection == .browse {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                tagChip(label: "All", isSelected: vm.selectedTag == nil) {
+                                    vm.selectTag(nil)
                                 }
-                            }
-                        }
-                        .padding(.horizontal)
-                    }
 
-                    ScrollView {
-                        if productStore.isLoading && vm.products.isEmpty {
-                            ProgressView("Loading products...")
-                                .frame(maxWidth: .infinity)
-                                .padding(.top, 48)
-                        } else if vm.filteredProducts.isEmpty {
-                            Text("No products available yet.")
-                                .font(.poppinsRegular(14))
-                                .foregroundStyle(AppTheme.secondaryText)
-                                .frame(maxWidth: .infinity)
-                                .padding(.top, 48)
-                        } else {
-                            LazyVGrid(columns: columns, spacing: 12) {
-                                ForEach(vm.filteredProducts) { product in
-                                    ProductGridCard(
-                                        product: product,
-                                        onTapFavorite: {
-                                            productStore.toggleFavorite(for: product)
-                                            vm.toggleFavorite(for: product)
-                                            analytics.track(.favoriteToggled(
-                                                productID: product.id,
-                                                isFavorite: !product.isFavorite,
-                                                source: "search"
-                                            ))
-                                        },
-                                        onTapCard: {
-                                            selectedProduct = product
-                                        }
-                                    )
+                                ForEach(vm.availableTags, id: \.self) { tag in
+                                    tagChip(label: tag.capitalized, isSelected: vm.selectedTag == tag) {
+                                        vm.selectTag(tag)
+                                    }
                                 }
                             }
                             .padding(.horizontal)
-                            .padding(.top, 4)
-                            .padding(.bottom, 80)
+                        }
+                    }
+
+                    ScrollView {
+                        if vm.selectedSection == .browse {
+                            browseContent
+                        } else {
+                            forYouContent
                         }
                     }
                 }
@@ -178,6 +162,93 @@ struct SearchView: View {
         .navigationDestination(item: $selectedProduct) { product in
             ProductDetailView(product: product)
         }
+    }
+
+    private var browseContent: some View {
+        Group {
+            if productStore.isLoading && vm.products.isEmpty {
+                ProgressView("Loading products...")
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 48)
+            } else if vm.filteredProducts.isEmpty {
+                Text("No products available yet.")
+                    .font(.poppinsRegular(14))
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 48)
+            } else {
+                productGrid(products: vm.filteredProducts)
+            }
+        }
+    }
+
+    private var forYouContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if !vm.recentSearches.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Based on your recent searches")
+                        .font(.poppinsSemiBold(14))
+                        .foregroundStyle(AppTheme.secondaryText)
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(vm.recentSearches, id: \.self) { search in
+                                tagChip(label: search, isSelected: false) {
+                                    vm.selectRecentSearch(search)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if vm.recommendedProducts.isEmpty {
+                Text("Like products and search for items to unlock personalized recommendations.")
+                    .font(.poppinsRegular(14))
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 8)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Recommended for you")
+                        .font(.poppinsSemiBold(16))
+                        .foregroundStyle(AppTheme.primaryText)
+
+                    productGrid(products: vm.recommendedProducts)
+                }
+            }
+        }
+        .padding(.horizontal)
+        .padding(.top, 4)
+        .padding(.bottom, 80)
+    }
+
+    private func productGrid(products: [Product]) -> some View {
+        LazyVGrid(columns: columns, spacing: 12) {
+            ForEach(products) { product in
+                ProductGridCard(
+                    product: product,
+                    onTapFavorite: {
+                        productStore.toggleFavorite(for: product)
+                        vm.toggleFavorite(for: product)
+                        analytics.track(.favoriteToggled(
+                            productID: product.id,
+                            isFavorite: !product.isFavorite,
+                            source: "search"
+                        ))
+                    },
+                    onTapCard: {
+                        if !vm.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            vm.saveCurrentQueryIfNeeded()
+                        }
+                        selectedProduct = product
+                    }
+                )
+            }
+        }
+        .padding(.horizontal)
+        .padding(.top, 4)
+        .padding(.bottom, 80)
     }
 
     private var filtersPanel: some View {
