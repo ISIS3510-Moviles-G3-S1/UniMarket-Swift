@@ -75,7 +75,7 @@ struct FeaturedProductCard: View {
                     ForEach(carouselImageURLs, id: \.self) { imageURL in
                         CachedRemoteImageView(urlString: imageURL, cacheKey: imageURL)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .clipped()
+                            .clipShape(RoundedRectangle(cornerRadius: 22))
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .automatic))

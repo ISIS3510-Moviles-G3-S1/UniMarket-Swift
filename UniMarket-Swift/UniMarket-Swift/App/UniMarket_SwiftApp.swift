@@ -33,13 +33,15 @@ struct UniMarket_SwiftApp: App {
     @StateObject private var chatStore = ChatStore()
     @StateObject private var productStore = ProductStore()
 
-    
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environmentObject(session)
                 .environmentObject(chatStore)
                 .environmentObject(productStore)
+                .task {
+                    productStore.prefetchImages(for: productStore.activeProducts)
+                }
                 .tint(AppTheme.accent)
                 .font(.poppinsRegular(16))
         }

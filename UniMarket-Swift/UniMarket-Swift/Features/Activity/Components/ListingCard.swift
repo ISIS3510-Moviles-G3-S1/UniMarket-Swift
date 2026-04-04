@@ -106,6 +106,7 @@ struct ListingCard: View {
                         .frame(height: 180)
                         .frame(maxWidth: .infinity)
                         .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 18))
                 }
             }
             .frame(height: 180)

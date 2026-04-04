@@ -145,7 +145,6 @@ struct ProductDetailView: View {
                         CachedRemoteImageView(urlString: imageURL, cacheKey: imageURL)
                             .frame(height: 280)
                             .frame(width: 300)
-                            .clipped()
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
                 }
