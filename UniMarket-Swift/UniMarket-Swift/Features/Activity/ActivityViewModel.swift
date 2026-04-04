@@ -32,9 +32,10 @@ final class ActivityViewModel: ObservableObject {
             return
         }
 
-        listings = products
+        let updated = products
             .filter { $0.sellerId == currentUserID }
             .sorted { $0.createdAt > $1.createdAt }
+        listings = updated
     }
 
     func deleteListing(_ product: Product) {

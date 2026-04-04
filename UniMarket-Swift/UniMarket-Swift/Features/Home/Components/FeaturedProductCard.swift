@@ -10,6 +10,21 @@ import SwiftUI
 struct FeaturedProductCard: View {
     let product: Product?
 
+    private var carouselImageURLs: [String] {
+        guard let product else { return [] }
+
+        let urls = product.imageURLs
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if !urls.isEmpty { return urls }
+
+        if let fallback = product.imagePath?.trimmingCharacters(in: .whitespacesAndNewlines), !fallback.isEmpty {
+            return [fallback]
+        }
+
+        return []
+    }
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -44,12 +59,8 @@ struct FeaturedProductCard: View {
 
     @ViewBuilder
     private var featuredImage: some View {
-        if let product {
-            if let imageURL = product.primaryImageURL, !imageURL.isEmpty {
-                AsyncImageView(urlString: imageURL, cacheKey: imageURL)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipShape(RoundedRectangle(cornerRadius: 22))
-            } else {
+        if product != nil{
+            if carouselImageURLs.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "photo")
                         .font(.poppinsSemiBold(36))
@@ -59,6 +70,16 @@ struct FeaturedProductCard: View {
                         .foregroundStyle(AppTheme.secondaryText)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                TabView {
+                    ForEach(carouselImageURLs, id: \.self) { imageURL in
+                        CachedRemoteImageView(urlString: imageURL, cacheKey: imageURL)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .clipShape(RoundedRectangle(cornerRadius: 22))
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .automatic))
+                .clipShape(RoundedRectangle(cornerRadius: 22))
             }
         } else {
             VStack(spacing: 10) {

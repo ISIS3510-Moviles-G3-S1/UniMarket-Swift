@@ -2,7 +2,9 @@ import Foundation
 import Combine
 import FirebaseAuth
 import FirebaseFirestore
+import FirebaseStorage
 import UIKit
+import Kingfisher
 
 struct CreateProductInput {
     let title: String
@@ -129,11 +131,23 @@ final class ProductService {
     }
 
     func deleteProduct(_ product: Product) async throws {
-        try await db.collection(collectionName).document(product.id).delete()
+        // Delete all images from Storage
+        for rawValue in product.imageURLs {
+            let candidate = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !candidate.isEmpty else { continue }
 
-        for imageURL in product.imageURLs where !imageURL.isEmpty {
-            try? await ImageUploadService.deleteImage(at: imageURL)
+            do {
+                // Parse the storage path out of the download URL instead
+                let ref = try storageReference(from: candidate)
+                try await ref.delete()
+                print("DEBUG: Successfully deleted image at \(candidate)")
+            } catch {
+                print("DEBUG: Image delete failed: \(error.localizedDescription)")
+            }
         }
+
+        // Delete Firestore document
+        try await db.collection(collectionName).document(product.id).delete()
     }
 
     private func resolvedSellerName(from user: FirebaseAuth.User) -> String {
@@ -181,6 +195,21 @@ final class ProductService {
         }
     }
 
+    private func storageReference(from downloadURL: String) throws -> StorageReference {
+        guard
+            let url = URL(string: downloadURL),
+            let encodedPath = url.pathComponents
+                .drop(while: { $0 != "o" })  // find the "o" segment in the URL
+                .dropFirst()                  // drop the "o" itself
+                .first,
+            let path = encodedPath.removingPercentEncoding
+        else {
+            throw ProductServiceError.invalidStorageURL(downloadURL)
+        }
+
+        return Storage.storage().reference(withPath: path)
+    }
+    
     private static func makeProduct(from document: DocumentSnapshot) -> Product? {
         let data = document.data() ?? [:]
 
@@ -224,6 +253,7 @@ final class ProductStore: ObservableObject {
 
     private let service: ProductService
     private var listener: ListenerRegistration?
+    private var imagePrefetcher: ImagePrefetcher?
 
     init(service: ProductService? = nil) {
         self.service = service ?? ProductService.shared
@@ -232,6 +262,7 @@ final class ProductStore: ObservableObject {
 
     deinit {
         listener?.remove()
+        imagePrefetcher?.stop()
     }
 
     var activeProducts: [Product] {
@@ -245,6 +276,21 @@ final class ProductStore: ObservableObject {
         return products
             .filter { $0.sellerId == userID }
             .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    func prefetchImages(for products: [Product]) {
+        let urls = products
+            .flatMap { $0.imageURLs }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .prefix(12)
+            .compactMap { URL(string: $0) }
+
+        guard !urls.isEmpty else { return }
+
+        imagePrefetcher?.stop()
+        imagePrefetcher = ImagePrefetcher(urls: Array(urls))
+        imagePrefetcher?.start()
     }
 
     func toggleFavorite(for product: Product) {
@@ -274,6 +320,7 @@ final class ProductStore: ObservableObject {
                 case .success(let products):
                     self.products = products
                     self.errorMessage = nil
+                    self.prefetchImages(for: products)
                 case .failure(let error):
                     self.errorMessage = error.localizedDescription
                 }
@@ -288,6 +335,7 @@ final class ProductStore: ObservableObject {
 enum ProductServiceError: LocalizedError {
     case notAuthenticated
     case invalidProductData
+    case invalidStorageURL(String)
 
     var errorDescription: String? {
         switch self {
@@ -295,6 +343,8 @@ enum ProductServiceError: LocalizedError {
             return "You must be logged in to publish a product."
         case .invalidProductData:
             return "The product could not be loaded after saving."
+        case .invalidStorageURL(let value):
+            return "One of the listing images has an invalid URL: \(value)"
         }
     }
 }

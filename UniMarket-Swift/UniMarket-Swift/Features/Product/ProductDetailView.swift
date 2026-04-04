@@ -130,12 +130,7 @@ struct ProductDetailView: View {
                 .fill(Color.white)
                 .frame(height: 280)
 
-            if let imageURL = vm.imageURL, !imageURL.isEmpty {
-                AsyncImageView(urlString: imageURL, cacheKey: imageURL)
-                    .frame(height: 280)
-                    .frame(width: 300)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-            } else {
+            if vm.imageURLs.isEmpty {
                 Image(systemName: "photo")
                     .font(.poppinsSemiBold(72))
                     .foregroundStyle(AppTheme.secondaryText)
@@ -144,8 +139,18 @@ struct ProductDetailView: View {
                     .frame(width: 300)
                     .clipped()
                     .clipShape(RoundedRectangle(cornerRadius: 12))
+            } else {
+                TabView {
+                    ForEach(vm.imageURLs, id: \.self) { imageURL in
+                        CachedRemoteImageView(urlString: imageURL, cacheKey: imageURL)
+                            .frame(height: 280)
+                            .frame(width: 300)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                }
+                .frame(height: 280)
+                .tabViewStyle(.page(indexDisplayMode: .automatic))
             }
-
         }
     }
 

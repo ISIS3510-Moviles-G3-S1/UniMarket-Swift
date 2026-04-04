@@ -12,6 +12,19 @@ struct ListingCard: View {
     let onDelete: () -> Void
     let onTapDetail: () -> Void
 
+    private var carouselImageURLs: [String] {
+        let urls = product.imageURLs
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if !urls.isEmpty { return urls }
+
+        if let fallback = product.imagePath?.trimmingCharacters(in: .whitespacesAndNewlines), !fallback.isEmpty {
+            return [fallback]
+        }
+
+        return []
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Button(action: onTapDetail) {
@@ -75,13 +88,7 @@ struct ListingCard: View {
 
     @ViewBuilder
     private var productImage: some View {
-        if let imageURL = product.primaryImageURL, !imageURL.isEmpty {
-            AsyncImageView(urlString: imageURL, cacheKey: imageURL)
-                .frame(height: 180)
-                .frame(maxWidth: .infinity)
-                .clipped()
-                .clipShape(RoundedRectangle(cornerRadius: 18))
-        } else {
+        if carouselImageURLs.isEmpty {
             ZStack {
                 RoundedRectangle(cornerRadius: 18)
                     .fill(AppTheme.background)
@@ -91,6 +98,19 @@ struct ListingCard: View {
             }
             .frame(height: 180)
             .frame(maxWidth: .infinity)
+            .clipShape(RoundedRectangle(cornerRadius: 18))
+        } else {
+            TabView {
+                ForEach(carouselImageURLs, id: \.self) { imageURL in
+                    CachedRemoteImageView(urlString: imageURL, cacheKey: imageURL)
+                        .frame(height: 180)
+                        .frame(maxWidth: .infinity)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 18))
+                }
+            }
+            .frame(height: 180)
+            .tabViewStyle(.page(indexDisplayMode: .automatic))
             .clipShape(RoundedRectangle(cornerRadius: 18))
         }
     }
