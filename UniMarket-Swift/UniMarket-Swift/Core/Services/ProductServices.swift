@@ -12,6 +12,7 @@ struct CreateProductInput {
     let conditionTag: String
     let description: String
     let imagesData: [Data]
+    let tags: [String]
 }
 
 final class ProductService {
@@ -70,7 +71,8 @@ final class ProductService {
         let tags = makeTags(
             from: input.title,
             description: input.description,
-            condition: input.conditionTag
+            condition: input.conditionTag,
+            userTags: input.tags
         )
 
         let data: [String: Any] = [
@@ -164,7 +166,7 @@ final class ProductService {
         return emailName.isEmpty ? "Unknown seller" : emailName.capitalized
     }
 
-    private func makeTags(from title: String, description: String, condition: String) -> [String] {
+    private func makeTags(from title: String, description: String, condition: String, userTags: [String]) -> [String] {
         let source = "\(title) \(description) \(condition)"
         let rawTokens = source
             .lowercased()
@@ -174,12 +176,25 @@ final class ProductService {
         var seen = Set<String>()
         var tags: [String] = []
 
+        for tag in userTags {
+            let normalized = normalizeTag(tag)
+            guard !normalized.isEmpty, seen.insert(normalized).inserted else { continue }
+            tags.append(normalized)
+            if tags.count == 8 { return tags }
+        }
+
         for token in rawTokens where seen.insert(token).inserted {
             tags.append(token)
             if tags.count == 8 { break }
         }
 
         return tags
+    }
+
+    private func normalizeTag(_ tag: String) -> String {
+        tag
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
     }
 
     private func priceBucket(for price: Int) -> String {

@@ -16,6 +16,9 @@ final class UploadProductViewModel: ObservableObject {
     @Published var price: String = ""
     @Published var condition: String = "Good"
     @Published var description: String = ""
+    @Published var selectedTags: [String] = []
+    @Published var tagSearchText: String = ""
+    @Published var customTagInput: String = ""
 
     @Published var isPosting: Bool = false
     @Published var errorMessage: String? = nil
@@ -100,10 +103,12 @@ final class UploadProductViewModel: ObservableObject {
                 price: parsedPrice,
                 conditionTag: condition,
                 description: description.trimmingCharacters(in: .whitespacesAndNewlines),
-                imagesData: imagesData
+                imagesData: imagesData,
+                tags: selectedTags
             )
 
-            _ = try await productStore.createProduct(input: input)
+            let product = try await productStore.createProduct(input: input)
+            await ListingReminderService.shared.recordListing(for: product.sellerId, at: product.createdAt)
             await MainActor.run { resetForm() }
             return true
         } catch {
@@ -122,7 +127,62 @@ final class UploadProductViewModel: ObservableObject {
         price = ""
         condition = "Good"
         description = ""
+        selectedTags = []
+        tagSearchText = ""
+        customTagInput = ""
         errorMessage = nil
+    }
+
+    var normalizedCustomTag: String {
+        normalizeTag(customTagInput)
+    }
+
+    func toggleTag(_ tag: String) {
+        let normalized = normalizeTag(tag)
+        guard !normalized.isEmpty else { return }
+
+        if let index = selectedTags.firstIndex(of: normalized) {
+            selectedTags.remove(at: index)
+        } else if selectedTags.count < 8 {
+            selectedTags.append(normalized)
+        } else {
+            errorMessage = "Maximum 8 tags."
+        }
+    }
+
+    func addCustomTag() {
+        let normalized = normalizedCustomTag
+        guard !normalized.isEmpty else { return }
+
+        if selectedTags.contains(normalized) {
+            customTagInput = ""
+            return
+        }
+
+        guard selectedTags.count < 8 else {
+            errorMessage = "Maximum 8 tags."
+            return
+        }
+
+        selectedTags.append(normalized)
+        customTagInput = ""
+        errorMessage = nil
+    }
+
+    func filteredAvailableTags(from tags: [String]) -> [String] {
+        let query = tagSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return tags
+            .map(normalizeTag)
+            .filter { !selectedTags.contains($0) }
+            .filter { query.isEmpty || $0.localizedCaseInsensitiveContains(query) }
+            .sorted()
+    }
+
+    private func normalizeTag(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
     }
 
     private func priceBucket(for price: Int) -> String {
