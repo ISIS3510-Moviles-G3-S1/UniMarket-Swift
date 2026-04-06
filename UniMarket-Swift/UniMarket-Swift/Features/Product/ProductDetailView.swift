@@ -15,6 +15,7 @@ struct ProductDetailView: View {
     @StateObject private var vm: ProductDetailViewModel
     @State private var editingProduct: Product?
     @State private var chatConversationID: String?
+    @State private var isStartingChat = false
 
     private let onProductUpdated: ((Product) -> Void)?
 
@@ -144,9 +145,12 @@ struct ProductDetailView: View {
         .sheet(item: chatRouteBinding) { route in
             NavigationStack {
                 ChatThreadView(conversationID: route.id)
+                    .environmentObject(chatStore)
             }
         }
     }
+
+    // MARK: - Image header
 
     private var imageHeader: some View {
         ZStack {
@@ -178,6 +182,8 @@ struct ProductDetailView: View {
         }
     }
 
+    // MARK: - Action buttons
+
     @ViewBuilder
     private var actionButtons: some View {
         if vm.isOwnListing {
@@ -192,6 +198,7 @@ struct ProductDetailView: View {
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         } else {
             HStack(spacing: 12) {
+                // MARK: Favorite button
                 Button {
                     let nextFavoriteState = !vm.isFavorite
                     if let product = productStore.products.first(where: { $0.id == vm.id }) {
@@ -218,23 +225,51 @@ struct ProductDetailView: View {
                 }
                 .buttonStyle(.plain)
 
-                Button("Message") {
-                    chatConversationID = chatStore.startConversation(
-                        productID: vm.id,
-                        productTitle: vm.title,
-                        sellerName: vm.sellerName,
-                        productImageName: ""
-                    )
+                // MARK: Message button
+                Button {
+                    guard !isStartingChat else { return }
+                    isStartingChat = true
+                    Task {
+                        do {
+                            let listing = ChatMessage.ListingSnapshot(
+                                listingId: vm.id,
+                                title: vm.title,
+                                price: vm.price,
+                                imagePath: vm.imageURLs.first ?? ""
+                            )
+                            let conversationID = try await chatStore.startOrGetConversation(
+                                sellerID: vm.sellerId,
+                                listing: listing
+                            )
+                            await MainActor.run {
+                                chatConversationID = conversationID
+                                isStartingChat = false
+                            }
+                        } catch {
+                            print("DEBUG: failed to start conversation \(error.localizedDescription)")
+                            await MainActor.run { isStartingChat = false }
+                        }
+                    }
+                } label: {
+                    Group {
+                        if isStartingChat {
+                            ProgressView().tint(AppTheme.primaryText)
+                        } else {
+                            Text("Message")
+                        }
+                    }
+                    .font(.poppinsSemiBold(16))
+                    .foregroundStyle(AppTheme.primaryText)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(AppTheme.accent)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
-                .font(.poppinsSemiBold(16))
-                .foregroundStyle(AppTheme.primaryText)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(AppTheme.accent)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
         }
     }
+
+    // MARK: - Chat sheet routing
 
     private struct ChatRoute: Identifiable {
         let id: String

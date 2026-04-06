@@ -46,6 +46,28 @@ struct ImageUploadService {
         }
     }
 
+    // MARK: - Upload message image
+    static func uploadMessageImage(_ image: UIImage, messageId: String) async throws -> String {
+        guard let uid = Auth.auth().currentUser?.uid else {
+            throw ImageUploadError.notAuthenticated
+        }
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            throw ImageUploadError.compressionFailed
+        }
+
+        let ref = Storage.storage().reference()
+            .child("messages/\(uid)/\(messageId)/image_0.jpg")
+
+        do {
+            _ = try await ref.putDataAsync(imageData)
+            let url = try await ref.downloadURL()
+            return url.absoluteString
+        } catch {
+            print("DEBUG: Failed to upload message image with error \(error.localizedDescription)")
+            throw error
+        }
+    }
+
     // MARK: - Delete image
     static func deleteImage(at urlString: String) async throws {
         let ref = Storage.storage().reference(forURL: urlString)

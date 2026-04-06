@@ -1,90 +1,378 @@
 import Foundation
 import SwiftUI
 import Combine
+import FirebaseFirestore
+import FirebaseAuth
+
+// MARK: - Models
 
 struct ChatMessage: Identifiable, Hashable {
-    let id: UUID
+    let id: String
+    let senderId: String
     let text: String
-    let isFromCurrentUser: Bool
-    let date: Date
+    let imageURLs: [String]
+    let type: MessageType
+    let sentAt: Date
+    var readAt: Date?
+    let replyTo: ReplySnapshot?
+    let listingSnapshot: ListingSnapshot?
 
-    init(id: UUID = UUID(), text: String, isFromCurrentUser: Bool, date: Date = Date()) {
-        self.id = id
-        self.text = text
-        self.isFromCurrentUser = isFromCurrentUser
-        self.date = date
+    var isFromCurrentUser: Bool {
+        senderId == Auth.auth().currentUser?.uid
+    }
+
+    enum MessageType: String {
+        case text, image, listing
+    }
+
+    struct ReplySnapshot: Hashable {
+        let messageId: String
+        let senderId: String
+        let textPreview: String
+    }
+
+    struct ListingSnapshot: Hashable {
+        let listingId: String
+        let title: String
+        let price: Int
+        let imagePath: String
     }
 }
 
 struct ChatConversation: Identifiable, Hashable {
-    let id: String
-    let sellerName: String
-    let productID: String
-    let productTitle: String
-    let productImageName: String
-    var unreadCount: Int
-    var messages: [ChatMessage]
-
-    var lastMessageText: String {
-        messages.last?.text ?? "No messages yet"
-    }
+    let id: String                  // Firestore document ID
+    let participants: [String]      // array of UIDs
+    var otherParticipantName: String
+    var otherParticipantAvatar: String?
+    var lastMessageText: String
+    var lastMessageAt: Date?
+    var unreadCount: Int            // computed locally from unread messages
+    var listingSnapshot: ChatMessage.ListingSnapshot?
 }
 
+// MARK: - ChatStore
+
+@MainActor
 final class ChatStore: ObservableObject {
     @Published private(set) var conversations: [ChatConversation] = []
+    @Published private(set) var messagesByConversation: [String: [ChatMessage]] = [:]
+    @Published var isLoading = false
+
+    private let db = Firestore.firestore()
+    private var conversationListener: ListenerRegistration?
+    private var messageListeners: [String: ListenerRegistration] = [:]
 
     var totalUnreadCount: Int {
         conversations.reduce(0) { $0 + $1.unreadCount }
     }
 
-    @discardableResult
-    func startConversation(productID: String, productTitle: String, sellerName: String, productImageName: String) -> String {
-        if let existing = conversations.first(where: { $0.productID == productID && $0.sellerName == sellerName }) {
-            return existing.id
-        }
+    // MARK: - Start observing inbox
 
-        let conversationID = UUID().uuidString
-        let initialMessage = ChatMessage(text: "Hi! Is this still available?", isFromCurrentUser: true)
+    func startObservingConversations() {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        isLoading = true
 
-        conversations.insert(
-            ChatConversation(
-                id: conversationID,
-                sellerName: sellerName,
-                productID: productID,
-                productTitle: productTitle,
-                productImageName: productImageName,
-                unreadCount: 0,
-                messages: [initialMessage]
-            ),
-            at: 0
-        )
+        conversationListener = db.collection("conversations")
+            .whereField("participants", arrayContains: uid)
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let self, let snapshot else {
+                    print("DEBUG ChatStore: conversation listener error \(error?.localizedDescription ?? "")")
+                    self?.isLoading = false
+                    return
+                }
 
-        return conversationID
+                Task {
+                    var updated: [ChatConversation] = []
+                    for doc in snapshot.documents {
+                        if let conv = await self.parseConversation(doc: doc, currentUID: uid) {
+                            updated.append(conv)
+                        }
+                    }
+                    self.conversations = updated.sorted {
+                        ($0.lastMessageAt ?? .distantPast) > ($1.lastMessageAt ?? .distantPast)
+                    }
+                    self.isLoading = false
+                }
+            }
     }
 
-    func sendMessage(_ text: String, in conversationID: String, fromCurrentUser: Bool = true) {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              let index = conversations.firstIndex(where: { $0.id == conversationID }) else {
-            return
-        }
-
-        conversations[index].messages.append(
-            ChatMessage(text: text, isFromCurrentUser: fromCurrentUser)
-        )
-
-        if !fromCurrentUser {
-            conversations[index].unreadCount += 1
-        }
-
-        let updated = conversations.remove(at: index)
-        conversations.insert(updated, at: 0)
+    func stopObservingConversations() {
+        conversationListener?.remove()
+        conversationListener = nil
+        messageListeners.values.forEach { $0.remove() }
+        messageListeners.removeAll()
     }
+
+    // MARK: - Parse conversation doc (fetches other user's display name)
+
+    private func parseConversation(doc: QueryDocumentSnapshot, currentUID: String) async -> ChatConversation? {
+        let data = doc.data()
+        guard let participants = data["participants"] as? [String] else { return nil }
+
+        let otherUID = participants.first(where: { $0 != currentUID }) ?? ""
+        var otherName = "Unknown"
+        var otherAvatar: String? = nil
+
+        // fetch display name from users collection
+        if !otherUID.isEmpty,
+           let userDoc = try? await db.collection("users").document(otherUID).getDocument(),
+           let userData = userDoc.data() {
+            otherName = userData["displayName"] as? String ?? "Unknown"
+            otherAvatar = userData["profilePic"] as? String
+        }
+
+        // unread count: messages where senderId != me and readAt is missing
+        let unread = (messagesByConversation[doc.documentID] ?? [])
+            .filter { !$0.isFromCurrentUser && $0.readAt == nil }
+            .count
+
+        var listingSnap: ChatMessage.ListingSnapshot? = nil
+        if let ls = data["listingSnapshot"] as? [String: Any] {
+            listingSnap = ChatMessage.ListingSnapshot(
+                listingId: ls["listingId"] as? String ?? "",
+                title: ls["title"] as? String ?? "",
+                price: ls["price"] as? Int ?? 0,
+                imagePath: ls["imagePath"] as? String ?? ""
+            )
+        }
+
+        let lastMessageText = data["lastMessageText"] as? String ?? "No messages yet"
+        let lastMessageAt = (data["lastMessageAt"] as? Timestamp)?.dateValue()
+
+        return ChatConversation(
+            id: doc.documentID,
+            participants: participants,
+            otherParticipantName: otherName,
+            otherParticipantAvatar: otherAvatar,
+            lastMessageText: lastMessageText,
+            lastMessageAt: lastMessageAt,
+            unreadCount: unread,
+            listingSnapshot: listingSnap
+        )
+    }
+
+    // MARK: - Observe messages in a thread
+
+    func startObservingMessages(for conversationID: String) {
+        guard messageListeners[conversationID] == nil else { return }
+
+        let listener = db.collection("conversations")
+            .document(conversationID)
+            .collection("messages")
+            .order(by: "sentAt")
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let self, let snapshot else {
+                    print("DEBUG ChatStore: message listener error \(error?.localizedDescription ?? "")")
+                    return
+                }
+
+                let messages = snapshot.documents.compactMap { self.parseMessage(doc: $0) }
+                self.messagesByConversation[conversationID] = messages
+
+                // update unreadCount on the conversation object
+                if let idx = self.conversations.firstIndex(where: { $0.id == conversationID }) {
+                    let unread = messages.filter { !$0.isFromCurrentUser && $0.readAt == nil }.count
+                    self.conversations[idx].unreadCount = unread
+                }
+            }
+
+        messageListeners[conversationID] = listener
+    }
+
+    func stopObservingMessages(for conversationID: String) {
+        messageListeners[conversationID]?.remove()
+        messageListeners.removeValue(forKey: conversationID)
+    }
+
+    // MARK: - Parse a message document
+
+    private func parseMessage(doc: QueryDocumentSnapshot) -> ChatMessage? {
+        let data = doc.data()
+        guard let senderId = data["senderId"] as? String,
+              let sentAt = (data["sentAt"] as? Timestamp)?.dateValue() else { return nil }
+
+        let text = data["text"] as? String ?? ""
+        let imageURLs = data["imageURLs"] as? [String] ?? []
+        let typeRaw = data["type"] as? String ?? "text"
+        let type = ChatMessage.MessageType(rawValue: typeRaw) ?? .text
+        let readAt = (data["readAt"] as? Timestamp)?.dateValue()
+
+        var replyTo: ChatMessage.ReplySnapshot? = nil
+        if let r = data["replyTo"] as? [String: Any] {
+            replyTo = ChatMessage.ReplySnapshot(
+                messageId: r["messageId"] as? String ?? "",
+                senderId: r["senderId"] as? String ?? "",
+                textPreview: r["textPreview"] as? String ?? ""
+            )
+        }
+
+        var listingSnap: ChatMessage.ListingSnapshot? = nil
+        if let ls = data["listingSnapshot"] as? [String: Any] {
+            listingSnap = ChatMessage.ListingSnapshot(
+                listingId: ls["listingId"] as? String ?? "",
+                title: ls["title"] as? String ?? "",
+                price: ls["price"] as? Int ?? 0,
+                imagePath: ls["imagePath"] as? String ?? ""
+            )
+        }
+
+        return ChatMessage(
+            id: doc.documentID,
+            senderId: senderId,
+            text: text,
+            imageURLs: imageURLs,
+            type: type,
+            sentAt: sentAt,
+            readAt: readAt,
+            replyTo: replyTo,
+            listingSnapshot: listingSnap
+        )
+    }
+
+    // MARK: - Start or get a conversation
+
+    /// Creates a conversation document if none exists between currentUser and sellerID for a given listing.
+    /// Returns the conversation ID.
+    func startOrGetConversation(
+        sellerID: String,
+        listing: ChatMessage.ListingSnapshot
+    ) async throws -> String {
+        guard let uid = Auth.auth().currentUser?.uid else { throw ChatError.notAuthenticated }
+        guard uid != sellerID else { throw ChatError.cannotMessageSelf }
+
+        // check if conversation already exists
+        let existing = conversations.first(where: {
+            $0.participants.contains(sellerID) && $0.listingSnapshot?.listingId == listing.listingId
+        })
+        if let existing { return existing.id }
+
+        // create new conversation document
+        let ref = db.collection("conversations").document()
+        let listingData: [String: Any] = [
+            "listingId": listing.listingId,
+            "title": listing.title,
+            "price": listing.price,
+            "imagePath": listing.imagePath
+        ]
+        let data: [String: Any] = [
+            "participants": [uid, sellerID],
+            "lastMessageText": "",
+            "lastMessageAt": FieldValue.serverTimestamp(),
+            "listingSnapshot": listingData
+        ]
+        try await ref.setData(data)
+        return ref.documentID
+    }
+
+    // MARK: - Send a text message
+
+    func sendMessage(
+        text: String,
+        in conversationID: String,
+        replyTo: ChatMessage.ReplySnapshot? = nil
+    ) async throws {
+        guard let uid = Auth.auth().currentUser?.uid else { throw ChatError.notAuthenticated }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        let msgRef = db.collection("conversations").document(conversationID)
+            .collection("messages").document()
+
+        var msgData: [String: Any] = [
+            "senderId": uid,
+            "text": trimmed,
+            "imageURLs": [String](),
+            "type": "text",
+            "sentAt": FieldValue.serverTimestamp(),
+            "readAt": NSNull()
+        ]
+
+        if let reply = replyTo {
+            msgData["replyTo"] = [
+                "messageId": reply.messageId,
+                "senderId": reply.senderId,
+                "textPreview": reply.textPreview
+            ]
+        }
+
+        // write message, then update conversation summary
+        try await msgRef.setData(msgData)
+        try await db.collection("conversations").document(conversationID).updateData([
+            "lastMessageText": trimmed,
+            "lastMessageAt": FieldValue.serverTimestamp()
+        ])
+    }
+
+    // MARK: - Send an image message
+
+    func sendImageMessage(
+        image: UIImage,
+        in conversationID: String
+    ) async throws {
+        guard let uid = Auth.auth().currentUser?.uid else { throw ChatError.notAuthenticated }
+
+        // reserve message doc ID first so we can use it in the storage path
+        let msgRef = db.collection("conversations").document(conversationID)
+            .collection("messages").document()
+
+        let imageURL = try await ImageUploadService.uploadMessageImage(image, messageId: msgRef.documentID)
+
+        let msgData: [String: Any] = [
+            "senderId": uid,
+            "text": "",
+            "imageURLs": [imageURL],
+            "type": "image",
+            "sentAt": FieldValue.serverTimestamp(),
+            "readAt": NSNull()
+        ]
+
+        try await msgRef.setData(msgData)
+        try await db.collection("conversations").document(conversationID).updateData([
+            "lastMessageText": "📷 Image",
+            "lastMessageAt": FieldValue.serverTimestamp()
+        ])
+    }
+
+    // MARK: - Mark conversation as read
 
     func markConversationAsRead(_ conversationID: String) {
-        guard let index = conversations.firstIndex(where: { $0.id == conversationID }) else {
-            return
+        guard Auth.auth().currentUser != nil else { return }
+        let messages = messagesByConversation[conversationID] ?? []
+        let unreadMessages = messages.filter { !$0.isFromCurrentUser && $0.readAt == nil }
+        guard !unreadMessages.isEmpty else { return }
+
+        let batch = db.batch()
+        for message in unreadMessages {
+            let ref = db.collection("conversations").document(conversationID)
+                .collection("messages").document(message.id)
+            batch.updateData(["readAt": FieldValue.serverTimestamp()], forDocument: ref)
         }
 
-        conversations[index].unreadCount = 0
+        Task {
+            do {
+                try await batch.commit()
+            } catch {
+                print("DEBUG ChatStore: failed to mark messages as read \(error.localizedDescription)")
+            }
+        }
+
+        // optimistic local update
+        if let idx = conversations.firstIndex(where: { $0.id == conversationID }) {
+            conversations[idx].unreadCount = 0
+        }
+    }
+}
+
+// MARK: - Errors
+
+enum ChatError: LocalizedError {
+    case notAuthenticated
+    case cannotMessageSelf
+
+    var errorDescription: String? {
+        switch self {
+        case .notAuthenticated: return "You must be logged in to send messages."
+        case .cannotMessageSelf: return "You can't message yourself."
+        }
     }
 }
