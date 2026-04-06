@@ -85,6 +85,26 @@ struct ProductDetailView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
+                    if !vm.tags.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Tags")
+                                .font(.poppinsSemiBold(16))
+                                .foregroundStyle(AppTheme.primaryText)
+
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 90), spacing: 8)], alignment: .leading, spacing: 8) {
+                                ForEach(vm.tags, id: \.self) { tag in
+                                    Text(tag.capitalized)
+                                        .font(.poppinsSemiBold(12))
+                                        .foregroundStyle(AppTheme.primaryText)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 8)
+                                        .background(AppTheme.accentAlt.opacity(0.35))
+                                        .clipShape(Capsule())
+                                }
+                            }
+                        }
+                    }
+
                     actionButtons
                 }
                 .padding(16)
@@ -100,6 +120,10 @@ struct ProductDetailView: View {
                 condition: vm.conditionText,
                 isOwnListing: vm.isOwnListing
             ))
+        }
+        .onReceive(productStore.$products) { products in
+            guard let updatedProduct = products.first(where: { $0.id == vm.id }) else { return }
+            vm.sync(with: updatedProduct)
         }
         .sheet(item: $editingProduct) { product in
             EditListingView(
@@ -169,10 +193,15 @@ struct ProductDetailView: View {
         } else {
             HStack(spacing: 12) {
                 Button {
-                    vm.toggleFavorite()
+                    let nextFavoriteState = !vm.isFavorite
+                    if let product = productStore.products.first(where: { $0.id == vm.id }) {
+                        productStore.toggleFavorite(for: product)
+                    } else {
+                        vm.toggleFavorite()
+                    }
                     analytics.track(.favoriteToggled(
                         productID: vm.id,
-                        isFavorite: vm.isFavorite,
+                        isFavorite: nextFavoriteState,
                         source: "product_detail"
                     ))
                 } label: {

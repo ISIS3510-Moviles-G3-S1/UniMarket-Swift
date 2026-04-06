@@ -8,11 +8,13 @@
 import SwiftUI
 import UIKit
 import FirebaseCore
+import UserNotifications
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         FirebaseApp.configure()
+        UNUserNotificationCenter.current().delegate = self
         AnalyticsService.shared.track(.appOpened())
         
         // Firebase Auth persistence is .local by default — the session is stored
@@ -23,6 +25,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         //   .none    → never persists (user must log in every launch)
         // Auth.auth().setPersistence(.local) { ... } ← only needed if overriding
         return true
+    }
+}
+
+extension AppDelegate: UNUserNotificationCenterDelegate {
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        [.banner, .sound, .badge]
     }
 }
 

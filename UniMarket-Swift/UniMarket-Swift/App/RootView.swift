@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import FirebaseAuth
 
 private enum AuthRoute: Hashable {
     case register
@@ -13,6 +14,7 @@ private enum AuthRoute: Hashable {
 
 struct RootView: View {
     @EnvironmentObject var session: SessionManager
+    @EnvironmentObject private var productStore: ProductStore
     @State private var authPath: [AuthRoute] = []
 
     var body: some View {
@@ -39,7 +41,35 @@ struct RootView: View {
                     authPath = []
                 }
             }
+            .onAppear {
+                syncListingReminder(for: session.user?.uid)
+            }
+            .onChange(of: session.user?.uid) { previousUserID, currentUserID in
+                if let previousUserID, previousUserID != currentUserID {
+                    Task {
+                        await ListingReminderService.shared.clearReminder(for: previousUserID)
+                    }
+                }
+
+                syncListingReminder(for: currentUserID)
+            }
+            .onChange(of: productStore.products) { _, _ in
+                syncListingReminder(for: session.user?.uid)
+            }
             .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+    }
+
+    private func syncListingReminder(for userID: String?) {
+        guard let userID else { return }
+
+        let lastListingDate = productStore
+            .myListings(for: userID)
+            .map(\.createdAt)
+            .max()
+
+        Task {
+            await ListingReminderService.shared.syncReminder(for: userID, lastListingDate: lastListingDate)
         }
     }
 }

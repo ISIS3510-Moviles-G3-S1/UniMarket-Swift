@@ -20,6 +20,7 @@ struct UploadProductView: View {
 
     @State private var showCamera = false
     @State private var showClothingAnalysis = false
+    @State private var isTagPickerExpanded = false
 
     private let conditions = ["Good", "Like New"]
     private let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
@@ -72,6 +73,8 @@ struct UploadProductView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                             .colorScheme(.light)
                     }
+
+                    tagsSection
 
                     if let msg = vm.errorMessage {
                         Text(msg)
@@ -251,6 +254,145 @@ struct UploadProductView: View {
                     .font(.poppinsRegular(12))
                     .foregroundStyle(AppTheme.secondaryText)
             }
+        }
+    }
+
+    private var tagsSection: some View {
+        let allTags = Array(Set(productStore.products.flatMap(\.tags))).sorted()
+        let filteredTags = vm.filteredAvailableTags(from: allTags)
+
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("Tags")
+                .font(.poppinsSemiBold(16))
+                .foregroundStyle(AppTheme.primaryText)
+
+            if !vm.selectedTags.isEmpty {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 90), spacing: 8)], alignment: .leading, spacing: 8) {
+                    ForEach(vm.selectedTags, id: \.self) { tag in
+                        Button {
+                            vm.toggleTag(tag)
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text(tag.capitalized)
+                                Image(systemName: "xmark")
+                                    .font(.caption2)
+                            }
+                            .font(.poppinsSemiBold(12))
+                            .foregroundStyle(AppTheme.primaryText)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(AppTheme.accentAlt.opacity(0.35))
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            VStack(spacing: 10) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        isTagPickerExpanded.toggle()
+                    }
+                } label: {
+                    HStack {
+                        Text("Choose tags")
+                            .font(.poppinsRegular(15))
+                            .foregroundStyle(vm.selectedTags.isEmpty ? AppTheme.secondaryText : AppTheme.primaryText)
+                        Spacer()
+                        Image(systemName: isTagPickerExpanded ? "chevron.up" : "chevron.down")
+                            .foregroundStyle(AppTheme.secondaryText)
+                    }
+                    .padding(12)
+                    .background(cardBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(borderColor, lineWidth: 1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .buttonStyle(.plain)
+
+                if isTagPickerExpanded {
+                    VStack(alignment: .leading, spacing: 10) {
+                        TextField("Search tags", text: $vm.tagSearchText)
+                            .font(.poppinsRegular(15))
+                            .foregroundStyle(AppTheme.primaryText)
+                            .tint(AppTheme.primaryText)
+                            .padding(12)
+                            .background(AppTheme.background)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 8) {
+                                if filteredTags.isEmpty {
+                                    Text("No matching tags.")
+                                        .font(.poppinsRegular(13))
+                                        .foregroundStyle(AppTheme.secondaryText)
+                                        .padding(.vertical, 4)
+                                } else {
+                                    ForEach(filteredTags, id: \.self) { tag in
+                                        Button {
+                                            vm.toggleTag(tag)
+                                        } label: {
+                                            HStack {
+                                                Text(tag.capitalized)
+                                                    .font(.poppinsRegular(14))
+                                                    .foregroundStyle(AppTheme.primaryText)
+                                                Spacer()
+                                                Image(systemName: "plus")
+                                                    .foregroundStyle(AppTheme.accent)
+                                            }
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 10)
+                                            .background(Color.white)
+                                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                            }
+                        }
+                        .frame(maxHeight: 180)
+                    }
+                    .padding(12)
+                    .background(cardBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(borderColor, lineWidth: 1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+            }
+
+            HStack(spacing: 10) {
+                TextField("Add a new tag", text: $vm.customTagInput)
+                    .font(.poppinsRegular(15))
+                    .foregroundStyle(AppTheme.primaryText)
+                    .tint(AppTheme.primaryText)
+                    .padding(12)
+                    .background(cardBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(borderColor, lineWidth: 1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                Button("Add") {
+                    vm.addCustomTag()
+                }
+                .font(.poppinsSemiBold(14))
+                .foregroundStyle(AppTheme.primaryText)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(AppTheme.accent)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .disabled(vm.normalizedCustomTag.isEmpty)
+            }
+
+            Text("You can select up to 8 tags.")
+                .font(.poppinsRegular(12))
+                .foregroundStyle(AppTheme.secondaryText)
         }
     }
 
