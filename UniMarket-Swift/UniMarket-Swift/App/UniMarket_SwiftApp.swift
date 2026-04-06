@@ -40,9 +40,12 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
 @main
 struct UniMarket_SwiftApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    @StateObject private var session = SessionManager()
-    @StateObject private var chatStore = ChatStore()
+    @StateObject private var session      = SessionManager()
+    @StateObject private var chatStore    = ChatStore()
     @StateObject private var productStore = ProductStore()
+    /// STRATEGY PATTERN - Context injected at the root so every view can
+    /// read the current color scheme via @EnvironmentObject if needed.
+    @StateObject private var themeContext = ThemeContext()
 
     var body: some Scene {
         WindowGroup {
@@ -50,11 +53,13 @@ struct UniMarket_SwiftApp: App {
                 .environmentObject(session)
                 .environmentObject(chatStore)
                 .environmentObject(productStore)
+                .environmentObject(themeContext)
                 .task {
                     productStore.prefetchImages(for: productStore.activeProducts)
                 }
                 .tint(AppTheme.accent)
                 .font(.poppinsRegular(16))
+                .preferredColorScheme(themeContext.currentColorScheme)
         }
     }
 }
