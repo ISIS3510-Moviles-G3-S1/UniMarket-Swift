@@ -4,6 +4,7 @@ import PhotosUI
 
 struct ChatThreadView: View {
     @EnvironmentObject private var chatStore: ChatStore
+    @Environment(\.hideTabBar) private var hideTabBar
 
     let conversationID: String
 
@@ -37,7 +38,9 @@ struct ChatThreadView: View {
                                 replyingTo = ChatMessage.ReplySnapshot(
                                     messageId: message.id,
                                     senderId: message.senderId,
-                                    textPreview: message.text.isEmpty ? "📷 Image" : String(message.text.prefix(60))
+                                    textPreview: message.text.isEmpty
+                                        ? "Image"
+                                        : String(message.text.prefix(60))
                                 )
                             })
                             .id(message.id)
@@ -84,9 +87,11 @@ struct ChatThreadView: View {
         .onAppear {
             chatStore.startObservingMessages(for: conversationID)
             chatStore.markConversationAsRead(conversationID)
+            withAnimation { hideTabBar.wrappedValue = true }
         }
         .onDisappear {
             chatStore.stopObservingMessages(for: conversationID)
+            withAnimation { hideTabBar.wrappedValue = false }
         }
         .onChange(of: selectedPhotoItem) {
             guard let item = selectedPhotoItem else { return }
@@ -250,11 +255,19 @@ private struct MessageBubble: View {
                     HStack {
                         Rectangle()
                             .frame(width: 2)
-                            .foregroundStyle(message.isFromCurrentUser ? .white.opacity(0.6) : AppTheme.accent)
+                            .foregroundStyle(
+                                message.isFromCurrentUser
+                                    ? .white.opacity(0.6)
+                                    : AppTheme.accent
+                            )
 
                         Text(reply.textPreview)
                             .font(.poppinsRegular(11))
-                            .foregroundStyle(message.isFromCurrentUser ? .white.opacity(0.7) : AppTheme.secondaryText)
+                            .foregroundStyle(
+                                message.isFromCurrentUser
+                                    ? .white.opacity(0.7)
+                                    : AppTheme.secondaryText
+                            )
                             .lineLimit(1)
                     }
                     .padding(.horizontal, 10)
@@ -300,7 +313,11 @@ private struct MessageBubble: View {
                     if message.isFromCurrentUser {
                         Image(systemName: message.readAt != nil ? "checkmark.circle.fill" : "checkmark.circle")
                             .font(.system(size: 10))
-                            .foregroundStyle(message.readAt != nil ? AppTheme.accent : AppTheme.secondaryText)
+                            .foregroundStyle(
+                                message.readAt != nil
+                                    ? AppTheme.accent
+                                    : AppTheme.secondaryText
+                            )
                     }
                 }
             }

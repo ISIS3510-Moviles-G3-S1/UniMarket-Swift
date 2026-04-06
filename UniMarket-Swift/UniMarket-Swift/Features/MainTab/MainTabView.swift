@@ -18,6 +18,7 @@ struct MainTabView: View {
     private let analytics = AnalyticsService.shared
     @State private var selectedTab: MainTab = .home
     @State private var showUpload = false
+    @State private var tabBarHidden = false
     @StateObject private var profileViewModel = ProfileViewModel()
 
     private let barHeight: CGFloat = 64
@@ -30,21 +31,24 @@ struct MainTabView: View {
                 tabContent
                     .frame(width: proxy.size.width, height: proxy.size.height)
 
-                CustomTabBar(
-                    selectedTab: $selectedTab,
-                    onTapUpload: { showUpload = true }
-                )
-                .frame(width: proxy.size.width - (sidePadding * 2), height: barHeight)
-                .position(
-                    x: proxy.size.width / 2,
-                    y: proxy.size.height - (barHeight / 2) - bottomSpacing
-                )
+                if !tabBarHidden {
+                    CustomTabBar(
+                        selectedTab: $selectedTab,
+                        onTapUpload: { showUpload = true }
+                    )
+                    .frame(width: proxy.size.width - (sidePadding * 2), height: barHeight)
+                    .position(
+                        x: proxy.size.width / 2,
+                        y: proxy.size.height - (barHeight / 2) - bottomSpacing
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .sheet(isPresented: $showUpload) {
-            NavigationStack { 
+            NavigationStack {
                 UploadProductView()
             }
         }
@@ -58,6 +62,7 @@ struct MainTabView: View {
                 await profileViewModel.onProfileTabSelected()
             }
         }
+        .environment(\.hideTabBar, $tabBarHidden)
     }
 
     @ViewBuilder
@@ -83,14 +88,10 @@ struct MainTabView: View {
 private extension MainTab {
     var analyticsName: String {
         switch self {
-        case .home:
-            return "home"
-        case .search:
-            return "search"
-        case .activity:
-            return "activity"
-        case .profile:
-            return "profile"
+        case .home: return "home"
+        case .search: return "search"
+        case .activity: return "activity"
+        case .profile: return "profile"
         }
     }
 }

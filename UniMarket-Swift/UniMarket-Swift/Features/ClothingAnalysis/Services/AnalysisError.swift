@@ -2,7 +2,7 @@
 //  AnalysisError.swift
 //  UniMarket-Swift
 //
-//  Created by Felipe Mesa on 19/03/26.
+//  Created by FELIPE MESA on 19/03/26.
 //
 
 import Foundation
