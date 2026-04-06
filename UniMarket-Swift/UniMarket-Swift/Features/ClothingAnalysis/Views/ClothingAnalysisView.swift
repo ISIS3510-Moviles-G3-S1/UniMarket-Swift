@@ -101,17 +101,27 @@ struct ClothingAnalysisView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.white)
         .sheet(isPresented: $showImagePicker) {
-            ClothingAnalysisImagePicker(
-                isPresented: $showImagePicker,
-                image: $viewModel.selectedImage,
-                sourceType: imagePickerSource == .camera ? .camera : .photoLibrary,
-                onImageSelected: { image in
-                    viewModel.analyzeImage(image)
-                }
-            )
+            if imagePickerSource == .camera {
+                ClothingAnalysisImagePicker(
+                    isPresented: $showImagePicker,
+                    image: $viewModel.selectedImage,
+                    sourceType: .camera,
+                    onImageSelected: { image in
+                        viewModel.analyzeImage(image)
+                    }
+                )
+            } else {
+                PhotoLibraryPicker(
+                    isPresented: $showImagePicker,
+                    image: $viewModel.selectedImage,
+                    onImageSelected: { image in
+                        viewModel.analyzeImage(image)
+                    }
+                )
+            }
         }
     }
-    
+
     // MARK: - Analysis Results View
     private var analysisResultsView: some View {
         ScrollView {
@@ -321,17 +331,27 @@ struct ClothingAnalysisView: View {
         }
         .backgroundColor(AppTheme.background)
         .sheet(isPresented: $showImagePicker) {
-            ClothingAnalysisImagePicker(
-                isPresented: $showImagePicker,
-                image: $viewModel.selectedImage,
-                sourceType: imagePickerSource == .camera ? .camera : .photoLibrary,
-                onImageSelected: { image in
-                    viewModel.analyzeImage(image)
-                }
-            )
+            if imagePickerSource == .camera {
+                ClothingAnalysisImagePicker(
+                    isPresented: $showImagePicker,
+                    image: $viewModel.selectedImage,
+                    sourceType: .camera,
+                    onImageSelected: { image in
+                        viewModel.analyzeImage(image)
+                    }
+                )
+            } else {
+                PhotoLibraryPicker(
+                    isPresented: $showImagePicker,
+                    image: $viewModel.selectedImage,
+                    onImageSelected: { image in
+                        viewModel.analyzeImage(image)
+                    }
+                )
+            }
         }
     }
-    
+
     // MARK: - Error View
     private var errorView: some View {
         VStack(spacing: 24) {
@@ -438,6 +458,53 @@ struct ClothingAnalysisImagePicker: UIViewControllerRepresentable {
         
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
             isPresented = false
+        }
+    }
+}
+
+// MARK: - Photo Library Picker (PHPickerViewController)
+struct PhotoLibraryPicker: UIViewControllerRepresentable {
+    @Binding var isPresented: Bool
+    @Binding var image: UIImage?
+    var onImageSelected: (UIImage) -> Void
+
+    func makeUIViewController(context: Context) -> PHPickerViewController {
+        var config = PHPickerConfiguration()
+        config.filter = .images
+        config.selectionLimit = 1
+        let picker = PHPickerViewController(configuration: config)
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(isPresented: $isPresented, image: $image, onImageSelected: onImageSelected)
+    }
+
+    class Coordinator: NSObject, PHPickerViewControllerDelegate {
+        @Binding var isPresented: Bool
+        @Binding var image: UIImage?
+        var onImageSelected: (UIImage) -> Void
+
+        init(isPresented: Binding<Bool>, image: Binding<UIImage?>, onImageSelected: @escaping (UIImage) -> Void) {
+            _isPresented = isPresented
+            _image = image
+            self.onImageSelected = onImageSelected
+        }
+
+        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+            isPresented = false
+            guard let result = results.first else { return }
+            result.itemProvider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
+                if let selectedImage = object as? UIImage {
+                    DispatchQueue.main.async {
+                        self?.image = selectedImage
+                        self?.onImageSelected(selectedImage)
+                    }
+                }
+            }
         }
     }
 }
