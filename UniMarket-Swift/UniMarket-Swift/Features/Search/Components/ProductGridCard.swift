@@ -82,6 +82,10 @@ struct ProductGridCard: View {
         .padding(10)
         .background(AppTheme.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+        )
         .shadow(color: .black.opacity(0.08), radius: 4)
         .contentShape(Rectangle())
         .onTapGesture {

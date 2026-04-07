@@ -100,6 +100,10 @@ struct ProfileView: View {
                                 .fill(AppTheme.cardBackground)
                                 .shadow(color: .black.opacity(0.05), radius: 4)
                         )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                        )
                     }
                     .padding(.horizontal)
                     .padding(.bottom, 120)
