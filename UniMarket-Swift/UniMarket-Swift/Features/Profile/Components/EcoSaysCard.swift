@@ -14,7 +14,7 @@ struct EcoSaysCard: View {
     @Environment(\.colorScheme) private var colorScheme
 
     private var imageBackground: Color {
-        colorScheme == .light ? .white : Color.white.opacity(0.12)
+        AppTheme.cardBackground
     }
 
     private var displayMessage: String {
@@ -54,8 +54,12 @@ struct EcoSaysCard: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 18)
-                .fill(.white)
+                .fill(AppTheme.cardBackground)
                 .shadow(color: .black.opacity(0.08), radius: 6)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(Color.white.opacity(0.18), lineWidth: 1)
         )
     }
 }

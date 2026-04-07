@@ -67,14 +67,22 @@ struct ListingCard: View {
                 .padding(.vertical, 12)
                 .background(AppTheme.background)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                )
             }
             .buttonStyle(.plain)
         }
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 20)
-                .fill(.white)
+                .fill(AppTheme.cardBackground)
                 .shadow(color: .black.opacity(0.08), radius: 6)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(Color.white.opacity(0.18), lineWidth: 1)
         )
     }
 

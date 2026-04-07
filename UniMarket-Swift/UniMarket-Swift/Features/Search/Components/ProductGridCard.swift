@@ -37,7 +37,7 @@ struct ProductGridCard: View {
                     .font(.poppinsSemiBold(10))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(Color.white.opacity(0.95))
+                    .background(AppTheme.cardBackground.opacity(0.92))
                     .clipShape(Capsule())
                     .padding(10)
 
@@ -46,8 +46,9 @@ struct ProductGridCard: View {
                     Button(action: onTapFavorite) {
                         Image(systemName: product.isFavorite ? "heart.fill" : "heart")
                             .font(.poppinsSemiBold(16))
+                            .foregroundStyle(product.isFavorite ? AppTheme.accent : AppTheme.primaryText)
                             .padding(10)
-                            .background(Color.white.opacity(0.95))
+                            .background(AppTheme.cardBackground.opacity(0.92))
                             .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
@@ -79,8 +80,12 @@ struct ProductGridCard: View {
                 .foregroundStyle(AppTheme.secondaryText)
         }
         .padding(10)
-        .background(Color.white)
+        .background(AppTheme.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+        )
         .shadow(color: .black.opacity(0.08), radius: 4)
         .contentShape(Rectangle())
         .onTapGesture {

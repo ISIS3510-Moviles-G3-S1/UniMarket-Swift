@@ -58,13 +58,13 @@ struct SearchView: View {
                                 }
                         }
                         .padding(12)
-                        .background(.white)
+                        .background(AppTheme.cardBackground)
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
                         Button {} label: {
                             Image(systemName: "camera")
                                 .frame(width: 44, height: 44)
-                                .background(.white)
+                                .background(AppTheme.cardBackground)
                                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         }
                         .buttonStyle(.plain)
@@ -77,7 +77,7 @@ struct SearchView: View {
                             ZStack(alignment: .topTrailing) {
                                 Image(systemName: "slider.horizontal.3") //filtros
                                     .frame(width: 44, height: 44)
-                                    .background(.white)
+                                    .background(AppTheme.cardBackground)
                                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
                                 if vm.activeFilterCount > 0 {
@@ -357,7 +357,7 @@ struct SearchView: View {
             }
             .padding(16)
         }
-        .background(Color.white)
+        .background(AppTheme.cardBackground)
     }
 
     private var minPriceBinding: Binding<Double> {
@@ -387,7 +387,7 @@ struct SearchView: View {
                 .foregroundStyle(AppTheme.primaryText)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(isSelected ? AppTheme.accentAlt : Color.white)
+                .background(isSelected ? AppTheme.accentAlt : AppTheme.cardBackground)
                 .clipShape(Capsule())
                 .overlay(
                     Capsule()

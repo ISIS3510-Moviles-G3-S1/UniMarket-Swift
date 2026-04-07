@@ -155,7 +155,7 @@ struct ProductDetailView: View {
     private var imageHeader: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.white)
+                .fill(AppTheme.cardBackground)
                 .frame(height: 280)
 
             if vm.imageURLs.isEmpty {

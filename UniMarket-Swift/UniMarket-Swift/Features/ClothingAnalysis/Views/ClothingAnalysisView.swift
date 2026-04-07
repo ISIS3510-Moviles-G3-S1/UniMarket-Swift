@@ -99,7 +99,7 @@ struct ClothingAnalysisView: View {
             .padding(.bottom, 32)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.white)
+        .background(AppTheme.cardBackground)
         .sheet(isPresented: $showImagePicker) {
             if imagePickerSource == .camera {
                 ClothingAnalysisImagePicker(
@@ -177,7 +177,7 @@ struct ClothingAnalysisView: View {
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white)
+                    .background(AppTheme.cardBackground)
                     .cornerRadius(12)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
@@ -204,7 +204,7 @@ struct ClothingAnalysisView: View {
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white)
+                    .background(AppTheme.cardBackground)
                     .cornerRadius(12)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
@@ -231,7 +231,7 @@ struct ClothingAnalysisView: View {
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white)
+                    .background(AppTheme.cardBackground)
                     .cornerRadius(12)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
@@ -258,7 +258,7 @@ struct ClothingAnalysisView: View {
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white)
+                    .background(AppTheme.cardBackground)
                     .cornerRadius(12)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
@@ -413,7 +413,7 @@ struct ClothingAnalysisView: View {
             .padding(.bottom, 32)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.white)
+        .background(AppTheme.cardBackground)
     }
 }
 

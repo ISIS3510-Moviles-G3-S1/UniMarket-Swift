@@ -34,11 +34,11 @@ struct LoginView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Welcome back")
                             .font(.poppinsBold(30))
-                            .foregroundStyle(.black)
+                            .foregroundStyle(AppTheme.primaryText)
 
                         Text("Log in to continue buying and selling on UniMarket.")
                             .font(.poppinsRegular(15))
-                            .foregroundStyle(.black.opacity(0.75))
+                            .foregroundStyle(AppTheme.secondaryText)
 
                         emailUsernameField
                         inputField(title: "Password", text: $password, isSecure: true)
@@ -58,7 +58,7 @@ struct LoginView: View {
                         } label: {
                             if isSubmitting {
                                 ProgressView()
-                                    .tint(.black)
+                                    .tint(AppTheme.primaryText)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 14)
                                     .background(AppTheme.accentAlt)
@@ -66,7 +66,7 @@ struct LoginView: View {
                             } else {
                                 Text("Log in")
                                     .font(.poppinsSemiBold(18))
-                                    .foregroundStyle(.black)
+                                    .foregroundStyle(AppTheme.primaryText)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 14)
                                     .background(AppTheme.accentAlt)
@@ -79,7 +79,7 @@ struct LoginView: View {
                             Spacer()
                             Text("Don't have an account?")
                                 .font(.poppinsRegular(14))
-                                .foregroundStyle(.black.opacity(0.6))
+                                .foregroundStyle(AppTheme.secondaryText)
                             Spacer()
                         }
                         .padding(.top, 4)
@@ -87,7 +87,7 @@ struct LoginView: View {
                         Button(action: onRegisterTap) {
                             Text("Create an account")
                                 .font(.poppinsSemiBold(16))
-                                .foregroundStyle(.black)
+                                .foregroundStyle(AppTheme.primaryText)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
                                 .background(AppTheme.background)
@@ -105,7 +105,7 @@ struct LoginView: View {
                         }
                     }
                     .padding(20)
-                    .background(.white)
+                    .background(AppTheme.cardBackground)
                     .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -125,13 +125,12 @@ struct LoginView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("University Email")
                 .font(.poppinsSemiBold(14))
-                .foregroundStyle(.black)
+                .foregroundStyle(AppTheme.primaryText)
 
             HStack(spacing: 0) {
                 TextField("username", text: $username)
                     .font(.poppinsRegular(15))
-                    .foregroundStyle(.black)
-                    .colorScheme(.light)
+                    .foregroundStyle(AppTheme.primaryText)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled(true)
                     .keyboardType(.emailAddress)
@@ -140,7 +139,7 @@ struct LoginView: View {
 
                 Text(domain)
                     .font(.poppinsRegular(15))
-                    .foregroundStyle(.black.opacity(0.45))
+                    .foregroundStyle(AppTheme.secondaryText)
                     .padding(.trailing, 14)
                     .lineLimit(1)
                     .fixedSize()
@@ -152,7 +151,7 @@ struct LoginView: View {
 
     private var logoSection: some View {
         RoundedRectangle(cornerRadius: 22, style: .continuous)
-            .fill(.white)
+            .fill(AppTheme.cardBackground)
             .frame(height: 160)
             .overlay {
                 VStack(spacing: 10) {
@@ -171,13 +170,12 @@ struct LoginView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.poppinsSemiBold(14))
-                .foregroundStyle(.black)
+                .foregroundStyle(AppTheme.primaryText)
 
             if isSecure {
                 SecureField(title, text: text)
                     .font(.poppinsRegular(15))
-                    .foregroundStyle(.black)
-                    .colorScheme(.light)
+                    .foregroundStyle(AppTheme.primaryText)
                     .textInputAutocapitalization(.never)
                     .padding(.vertical, 12)
                     .padding(.horizontal, 14)
@@ -186,8 +184,7 @@ struct LoginView: View {
             } else {
                 TextField(title, text: text)
                     .font(.poppinsRegular(15))
-                    .foregroundStyle(.black)
-                    .colorScheme(.light)
+                    .foregroundStyle(AppTheme.primaryText)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled(true)
                     .keyboardType(.emailAddress)
