@@ -12,12 +12,12 @@ struct SellerPerformanceCard: View {
     let onPeriodChange: (ProfileViewModel.SalesPeriod) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
 
             // Header
             HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "chart.bar.fill")
-                    .font(.system(size: 20, weight: .semibold))
+                Image(systemName: "tag.fill")
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(AppTheme.accent)
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -35,7 +35,7 @@ struct SellerPerformanceCard: View {
 
             Divider()
 
-            // Period picker
+            // Period picker — AppTheme.background is UIColor.systemGroupedBackground (fully adaptive)
             Menu {
                 ForEach(ProfileViewModel.SalesPeriod.allCases, id: \.self) { period in
                     Button {
@@ -61,7 +61,7 @@ struct SellerPerformanceCard: View {
                 .padding(.vertical, 7)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(AppTheme.accent.opacity(0.1))
+                        .fill(AppTheme.background)
                 )
             }
 
@@ -84,13 +84,13 @@ struct SellerPerformanceCard: View {
 
             Divider()
 
-            // Feedback message
+            // Personalized feedback
             Text(feedbackMessage)
                 .font(.poppinsRegular(12))
                 .foregroundStyle(AppTheme.primaryText)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(16)
+        .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 18)
                 .fill(AppTheme.cardBackground)
