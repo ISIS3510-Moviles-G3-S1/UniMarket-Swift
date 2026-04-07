@@ -20,7 +20,7 @@ struct HomeActionButtonsView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 18)
             .background(AppTheme.accentAlt)
-            .foregroundStyle(AppTheme.primaryText)
+            .foregroundStyle(Color.black) // accentAlt is always a light fixed color — text must always be dark
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
             Button("Start Selling") {
