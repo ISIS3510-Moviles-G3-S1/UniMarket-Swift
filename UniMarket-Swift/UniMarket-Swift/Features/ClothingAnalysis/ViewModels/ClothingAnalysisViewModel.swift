@@ -37,10 +37,14 @@ class ClothingAnalysisViewModel: NSObject, ObservableObject {
         errorMessage = nil
         
         Task {
+            let start = Date()
             do {
                 // Use Core ML facade for image analysis (100% offline, no API calls)
                 let result = try await coreMLFacade.analyzeImage(image)
-                
+                let durationMs = Int(Date().timeIntervalSince(start) * 1000)
+
+                AnalyticsService.shared.track(.aiTaggingCompleted(durationMs: durationMs, tagCount: result.allTags.count))
+
                 // Update state on main thread
                 await MainActor.run {
                     self.analysisResult = result
@@ -49,11 +53,15 @@ class ClothingAnalysisViewModel: NSObject, ObservableObject {
                     self.isAnalyzing = false
                 }
             } catch let error as AnalysisError {
+                let durationMs = Int(Date().timeIntervalSince(start) * 1000)
+                AnalyticsService.shared.track(.aiTaggingCompleted(durationMs: durationMs, tagCount: 0))
                 await MainActor.run {
                     self.errorMessage = error.errorDescription ?? "Unknown error occurred"
                     self.isAnalyzing = false
                 }
             } catch {
+                let durationMs = Int(Date().timeIntervalSince(start) * 1000)
+                AnalyticsService.shared.track(.aiTaggingCompleted(durationMs: durationMs, tagCount: 0))
                 await MainActor.run {
                     self.errorMessage = error.localizedDescription
                     self.isAnalyzing = false
@@ -122,21 +130,9 @@ class ClothingAnalysisViewModel: NSObject, ObservableObject {
     /// Logs the analysis event for analytics
     func logAnalyticsEvent() {
         guard let result = analysisResult else { return }
-        
-        let event: [String: Any] = [
-            "event": "clothing_analysis_completed",
-            "processing_time_ms": result.processingTimeMs,
-            "category": result.category,
-            "colors_count": result.colors.count,
-            "total_tags": result.allTags.count,
-            "confidence": result.confidencePercentage,
-            "timestamp": result.timestamp.timeIntervalSince1970
-        ]
-        
-        // TODO: Send to analytics service
-        print("Analytics Event: \(event)")
+        AnalyticsService.shared.track(.aiTaggingCompleted(durationMs: result.processingTimeMs, tagCount: result.allTags.count))
     }
-    
+
     /// Logs when user confirms and proceeds with the listing
     func logListingCreationStart() {
         let event: [String: Any] = [
@@ -144,8 +140,6 @@ class ClothingAnalysisViewModel: NSObject, ObservableObject {
             "tags_count": editableTags.count,
             "processing_time_ms": processingTimeMs
         ]
-        
-        // TODO: Send to analytics service
         print("Analytics Event: \(event)")
     }
 }
