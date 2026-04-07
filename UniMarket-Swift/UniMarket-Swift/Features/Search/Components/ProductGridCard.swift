@@ -12,6 +12,7 @@ struct ProductGridCard: View {
     let onTapFavorite: () -> Void
     let onTapCard: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
 
     private var carouselImageURLs: [String] {
         let urls = product.imageURLs
@@ -30,7 +31,7 @@ struct ProductGridCard: View {
         VStack(alignment: .leading, spacing: 10) {
             ZStack(alignment: .topLeading) {
                 RoundedRectangle(cornerRadius: 18)
-                    .fill(AppTheme.background)
+                    .fill(AppTheme.adaptiveBackground(for: colorScheme))
                     .frame(height: 180)
                     .overlay(productImage)
 
@@ -58,13 +59,13 @@ struct ProductGridCard: View {
 
             Text(product.title)
                 .font(.poppinsSemiBold(14))
-                .foregroundStyle(AppTheme.primaryText)
+                .foregroundStyle(AppTheme.adaptivePrimaryText(for: colorScheme))
                 .lineLimit(1)
 
             HStack {
                 Text("$\(product.price)")
                     .font(.poppinsBold(15))
-                    .foregroundStyle(AppTheme.primaryText)
+                    .foregroundStyle(AppTheme.adaptivePrimaryText(for: colorScheme))
                 Spacer()
                 HStack(spacing: 4) {
                     Image(systemName: "star.fill")
@@ -72,15 +73,15 @@ struct ProductGridCard: View {
                     Text(String(format: "%.1f", product.rating))
                         .font(.poppinsRegular(12))
                 }
-                .foregroundStyle(AppTheme.secondaryText)
+                .foregroundStyle(AppTheme.adaptiveSecondaryText(for: colorScheme))
             }
 
             Text(product.sellerName)
                 .font(.poppinsRegular(12))
-                .foregroundStyle(AppTheme.secondaryText)
+                .foregroundStyle(AppTheme.adaptiveSecondaryText(for: colorScheme))
         }
         .padding(10)
-        .background(AppTheme.cardBackground)
+        .background(AppTheme.adaptiveCardBackground(for: colorScheme))
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .shadow(color: .black.opacity(0.08), radius: 4)
         .contentShape(Rectangle())
@@ -94,10 +95,10 @@ struct ProductGridCard: View {
         if carouselImageURLs.isEmpty {
             ZStack {
                 RoundedRectangle(cornerRadius: 18)
-                    .fill(AppTheme.background)
+                    .fill(AppTheme.adaptiveBackground(for: colorScheme))
                 Image(systemName: "photo")
                     .font(.poppinsSemiBold(30))
-                    .foregroundStyle(AppTheme.secondaryText)
+                    .foregroundStyle(AppTheme.adaptiveSecondaryText(for: colorScheme))
             }
             .frame(height: 180)
             .frame(maxWidth: .infinity)

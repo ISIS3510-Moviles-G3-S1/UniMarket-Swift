@@ -6,26 +6,35 @@
 import SwiftUI
 
 enum AppTheme {
-    // MARK: - Brand Colors (fixed, intentionally not adaptive)
-    static let accent    = Color(hex: "72A08A")
-    static let accentAlt = Color(hex: "B1B87D")
+    // MARK: - Brand Colors (Light Mode — unchanged)
+    static let accent        = Color(hex: "72A08A")
+    static let accentAlt     = Color(hex: "B1B87D")
+    static let background    = Color(hex: "F2F2F2")
+    static let primaryText   = Color.black
+    static let secondaryText = Color.black.opacity(0.6)
 
-    // MARK: - Semantic Adaptive Colors
-    // Resolved at render time by SwiftUI using the active color scheme,
-    // including the one set by ThemeContext via .preferredColorScheme().
-    // No @Environment(\.colorScheme) required in individual views.
+    // MARK: - Adaptive Colors (Strategy Pattern support)
+    // Use these in views that must respond to theme changes.
 
-    /// Page / screen background — brand light gray in light, primary system dark in dark.
-    static let background    = Color(UIColor.systemGroupedBackground)
+    /// Primary text — white in dark mode, black in light mode.
+    static func adaptivePrimaryText(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? .white : primaryText
+    }
 
-    /// Card / surface background — white in light, elevated dark gray in dark.
-    static let cardBackground = Color(UIColor.secondarySystemBackground)
+    /// Secondary text — slightly dimmed white in dark mode.
+    static func adaptiveSecondaryText(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color.white.opacity(0.7) : secondaryText
+    }
 
-    /// Primary text — black in light, white in dark.
-    static let primaryText   = Color(UIColor.label)
+    /// Card / surface background — system dark gray in dark mode, white in light.
+    static func adaptiveCardBackground(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color(UIColor.secondarySystemBackground) : .white
+    }
 
-    /// Secondary text — dark gray in light, light gray in dark.
-    static let secondaryText = Color(UIColor.secondaryLabel)
+    /// Page background — system dark in dark mode, brand light gray in light.
+    static func adaptiveBackground(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color(UIColor.systemBackground) : background
+    }
 }
 
 extension Font {
