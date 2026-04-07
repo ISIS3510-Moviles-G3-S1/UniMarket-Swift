@@ -251,4 +251,14 @@ extension AnalyticsEvent {
             ]
         )
     }
+
+    static func aiTaggingCompleted(durationMs: Int, tagCount: Int) -> AnalyticsEvent {
+        AnalyticsEvent(
+            name: "ai_tagging_completed",
+            parameters: [
+                "duration_ms": .int(durationMs),
+                "tag_count": .int(tagCount)
+            ]
+        )
+    }
 }
