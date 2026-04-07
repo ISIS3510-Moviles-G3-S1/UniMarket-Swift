@@ -70,5 +70,9 @@ struct ProfileHeaderCard: View {
                 .fill(AppTheme.cardBackground)
                 .shadow(color: .black.opacity(0.08), radius: 6)
         )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+        )
     }
 }
