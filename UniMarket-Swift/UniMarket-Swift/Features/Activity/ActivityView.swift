@@ -158,6 +158,10 @@ struct ActivityView: View {
                         .padding(12)
                         .background(AppTheme.cardBackground)
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                        )
                     }
                     .buttonStyle(.plain)
                 }
