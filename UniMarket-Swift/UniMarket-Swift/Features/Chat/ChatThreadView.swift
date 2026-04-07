@@ -123,7 +123,7 @@ struct ChatThreadView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
-        .background(Color.white.opacity(0.6))
+        .background(AppTheme.cardBackground.opacity(0.9))
     }
 
     // MARK: - Reply preview bar
@@ -173,7 +173,7 @@ struct ChatThreadView: View {
                 .font(.poppinsRegular(14))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
-                .background(Color.white)
+                .background(AppTheme.cardBackground)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
             Button {
@@ -300,7 +300,7 @@ private struct MessageBubble: View {
                         .foregroundStyle(message.isFromCurrentUser ? .white : AppTheme.primaryText)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 10)
-                        .background(message.isFromCurrentUser ? AppTheme.accent : Color.white)
+                        .background(message.isFromCurrentUser ? AppTheme.accent : AppTheme.cardBackground)
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
 

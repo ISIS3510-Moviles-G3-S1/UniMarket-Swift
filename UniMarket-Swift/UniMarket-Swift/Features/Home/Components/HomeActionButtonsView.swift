@@ -20,7 +20,7 @@ struct HomeActionButtonsView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 18)
             .background(AppTheme.accentAlt)
-            .foregroundStyle(.black)
+            .foregroundStyle(AppTheme.primaryText)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
             Button("Start Selling") {
@@ -29,7 +29,7 @@ struct HomeActionButtonsView: View {
             .font(.poppinsSemiBold(15))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 18)
-            .foregroundStyle(.black)
+            .foregroundStyle(AppTheme.primaryText)
             .background(AppTheme.background.opacity(0.55))
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
             .overlay(
@@ -57,7 +57,7 @@ struct HomeActionButtonsView: View {
             .foregroundStyle(AppTheme.accent)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(.white)
+            .background(AppTheme.cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)

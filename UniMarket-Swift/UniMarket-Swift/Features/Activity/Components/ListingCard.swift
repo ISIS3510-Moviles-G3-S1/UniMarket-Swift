@@ -73,7 +73,7 @@ struct ListingCard: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 20)
-                .fill(.white)
+                .fill(AppTheme.cardBackground)
                 .shadow(color: .black.opacity(0.08), radius: 6)
         )
     }

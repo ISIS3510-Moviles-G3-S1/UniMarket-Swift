@@ -26,7 +26,7 @@ struct ActivityFeedList: View {
                     Spacer()
                 }
                 .padding()
-                .background(Color.white)
+                .background(AppTheme.cardBackground)
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
         }

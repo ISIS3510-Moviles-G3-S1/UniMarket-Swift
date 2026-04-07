@@ -47,7 +47,7 @@ struct ProfileMetricCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 18)
-                .fill(.white)
+                .fill(AppTheme.cardBackground)
                 .shadow(color: .black.opacity(0.08), radius: 6)
         )
     }

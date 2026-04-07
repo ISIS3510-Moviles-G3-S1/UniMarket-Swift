@@ -97,7 +97,7 @@ struct ProfileView: View {
                         .padding(.vertical, 14)
                         .background(
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(.white)
+                                .fill(AppTheme.cardBackground)
                                 .shadow(color: .black.opacity(0.05), radius: 4)
                         )
                     }

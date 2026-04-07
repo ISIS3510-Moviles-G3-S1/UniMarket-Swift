@@ -22,13 +22,13 @@ struct ProfileHeaderCard: View {
                 CachedRemoteImageView(urlString: profilePicURL, cacheKey: profilePicURL, placeholderStyle: .profile)
                     .frame(width: 56, height: 56)
                     .clipShape(Circle())
-                    .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 1))
+                    .overlay(Circle().stroke(AppTheme.borderColor, lineWidth: 1))
 
                 Button(action: onEditImage) {
                     Image(systemName: "pencil.circle.fill")
                         .symbolRenderingMode(.multicolor)
                         .foregroundStyle(AppTheme.accent)
-                        .background(Color.white.clipShape(Circle()))
+                        .background(AppTheme.cardBackground.clipShape(Circle()))
                         .font(.system(size: 18))
                 }
                 .offset(x: 4, y: 4)
@@ -67,7 +67,7 @@ struct ProfileHeaderCard: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 18)
-                .fill(.white)
+                .fill(AppTheme.cardBackground)
                 .shadow(color: .black.opacity(0.08), radius: 6)
         )
     }

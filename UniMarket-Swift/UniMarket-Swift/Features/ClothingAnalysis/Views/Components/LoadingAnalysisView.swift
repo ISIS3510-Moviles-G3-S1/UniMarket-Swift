@@ -52,7 +52,7 @@ struct LoadingAnalysisView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.white)
+        .background(AppTheme.cardBackground)
         .onAppear {
             isAnimating = true
         }

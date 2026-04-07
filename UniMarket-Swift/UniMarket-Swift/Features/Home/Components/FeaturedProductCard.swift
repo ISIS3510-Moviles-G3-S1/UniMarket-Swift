@@ -28,7 +28,7 @@ struct FeaturedProductCard: View {
     var body: some View {
         ZStack(alignment: .topTrailing) {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(.white)
+                .fill(AppTheme.cardBackground)
                 .frame(height: 320)
                 .overlay(
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -42,11 +42,11 @@ struct FeaturedProductCard: View {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text("$\(product.price)")
                         .font(.poppinsBold(34))
-                        .foregroundStyle(.black)
+                        .foregroundStyle(AppTheme.primaryText)
 
                     Text("\(product.conditionTag) ✓")
                         .font(.poppinsSemiBold(14))
-                        .foregroundStyle(.black.opacity(0.9))
+                        .foregroundStyle(AppTheme.primaryText)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)

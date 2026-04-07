@@ -12,7 +12,7 @@ struct HomeHeaderView: View {
         VStack(spacing: 14) {
             Text("Sustainable Fashion for Students")
                 .font(.poppinsSemiBold(12))
-                .foregroundStyle(.black)
+                .foregroundStyle(AppTheme.primaryText)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 7)
                 .background(AppTheme.accent.opacity(0.24))
@@ -34,7 +34,7 @@ struct HomeHeaderView: View {
 
             Text("Buy, sell, and swap second-hand clothes with students from your university. AI-powered tagging. Zero effort. Real impact.")
                 .font(.poppinsRegular(19))
-                .foregroundStyle(.black.opacity(0.5))
+                .foregroundStyle(AppTheme.secondaryText)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 6)
         }

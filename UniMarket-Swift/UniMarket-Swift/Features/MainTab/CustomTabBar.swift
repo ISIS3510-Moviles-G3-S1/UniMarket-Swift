@@ -12,7 +12,7 @@ struct CustomTabBar: View {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 18)
-                .fill(.white)
+                .fill(AppTheme.cardBackground)
                 .shadow(color: .black.opacity(0.12), radius: 10)
                 .frame(height: 64)
 
@@ -34,7 +34,7 @@ struct CustomTabBar: View {
             } label: {
                 ZStack {
                     Circle()
-                        .fill(.white)
+                        .fill(AppTheme.cardBackground)
                         .shadow(color: .black.opacity(0.12), radius: 10)
                         .frame(width: 64, height: 64)
                     Circle()

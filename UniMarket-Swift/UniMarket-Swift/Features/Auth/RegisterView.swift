@@ -37,11 +37,11 @@ struct RegisterView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Create account")
                             .font(.poppinsBold(30))
-                            .foregroundStyle(.black)
+                            .foregroundStyle(AppTheme.primaryText)
 
                         Text("Join UniMarket with your university email.")
                             .font(.poppinsRegular(15))
-                            .foregroundStyle(.black.opacity(0.75))
+                            .foregroundStyle(AppTheme.secondaryText)
 
                         if registrationSent {
                             // Success state
@@ -52,11 +52,11 @@ struct RegisterView: View {
 
                                 Text("Verification email sent!")
                                     .font(.poppinsSemiBold(18))
-                                    .foregroundStyle(.black)
+                                    .foregroundStyle(AppTheme.primaryText)
 
                                 Text("Check your @uniandes.edu.co inbox and click the link to activate your account.")
                                     .font(.poppinsRegular(14))
-                                    .foregroundStyle(.black.opacity(0.7))
+                                    .foregroundStyle(AppTheme.secondaryText)
                                     .multilineTextAlignment(.center)
 
                                 Button {
@@ -64,7 +64,7 @@ struct RegisterView: View {
                                 } label: {
                                     Text("Back to Login")
                                         .font(.poppinsSemiBold(16))
-                                        .foregroundStyle(.black)
+                                        .foregroundStyle(AppTheme.primaryText)
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 14)
                                         .background(AppTheme.accentAlt)
@@ -93,7 +93,7 @@ struct RegisterView: View {
                             } label: {
                                 if isSubmitting {
                                     ProgressView()
-                                        .tint(.black)
+                                        .tint(AppTheme.primaryText)
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 14)
                                         .background(AppTheme.accentAlt)
@@ -101,7 +101,7 @@ struct RegisterView: View {
                                 } else {
                                     Text("Create Account")
                                         .font(.poppinsSemiBold(18))
-                                        .foregroundStyle(.black)
+                                        .foregroundStyle(AppTheme.primaryText)
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 14)
                                         .background(AppTheme.accentAlt)
@@ -112,7 +112,7 @@ struct RegisterView: View {
                         }
                     }
                     .padding(20)
-                    .background(.white)
+                    .background(AppTheme.cardBackground)
                     .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -155,7 +155,7 @@ struct RegisterView: View {
 
     private var logoSection: some View {
         RoundedRectangle(cornerRadius: 22, style: .continuous)
-            .fill(.white)
+            .fill(AppTheme.cardBackground)
             .frame(height: 160)
             .overlay {
                 Image("AppLogo")
@@ -170,13 +170,12 @@ struct RegisterView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("University Email")
                 .font(.poppinsSemiBold(14))
-                .foregroundStyle(.black)
+                .foregroundStyle(AppTheme.primaryText)
 
             HStack(spacing: 0) {
                 TextField("username", text: $username)
                     .font(.poppinsRegular(15))
-                    .foregroundStyle(.black)
-                    .colorScheme(.light)
+                    .foregroundStyle(AppTheme.primaryText)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled(true)
                     .keyboardType(.emailAddress)
@@ -185,7 +184,7 @@ struct RegisterView: View {
 
                 Text(domain)
                     .font(.poppinsRegular(15))
-                    .foregroundStyle(.black.opacity(0.45))
+                    .foregroundStyle(AppTheme.secondaryText)
                     .padding(.trailing, 14)
                     .lineLimit(1)
                     .fixedSize()
@@ -200,13 +199,12 @@ struct RegisterView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.poppinsSemiBold(14))
-                .foregroundStyle(.black)
+                .foregroundStyle(AppTheme.primaryText)
 
             if isSecure {
                 SecureField(title, text: text)
                     .font(.poppinsRegular(15))
-                    .foregroundStyle(.black)
-                    .colorScheme(.light)
+                    .foregroundStyle(AppTheme.primaryText)
                     .textInputAutocapitalization(.never)
                     .padding(.vertical, 12)
                     .padding(.horizontal, 14)
@@ -215,8 +213,7 @@ struct RegisterView: View {
             } else {
                 TextField(title, text: text)
                     .font(.poppinsRegular(15))
-                    .foregroundStyle(.black)
-                    .colorScheme(.light)
+                    .foregroundStyle(AppTheme.primaryText)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled(true)
                     .keyboardType(keyboard)

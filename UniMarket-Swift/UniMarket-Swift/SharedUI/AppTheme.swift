@@ -13,6 +13,7 @@ enum AppTheme {
     static let primaryText = Color(UIColor.label)
     static let secondaryText = Color(UIColor.secondaryLabel)
     static let cardBackground = Color(UIColor.systemBackground)
+    static let borderColor = Color(UIColor.separator)
 }
 
 extension Font {

@@ -24,8 +24,8 @@ struct UploadProductView: View {
 
     private let conditions = ["Good", "Like New"]
     private let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
-    private let cardBackground = Color.white
-    private let borderColor = Color.black.opacity(0.08)
+    private var cardBackground: Color { AppTheme.cardBackground }
+    private var borderColor: Color { AppTheme.borderColor }
 
     var body: some View {
         ZStack {
@@ -51,7 +51,6 @@ struct UploadProductView: View {
                             ForEach(conditions, id: \.self) { Text($0).tag($0) }
                         }
                         .pickerStyle(.segmented)
-                        .colorScheme(.light)
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
@@ -71,7 +70,6 @@ struct UploadProductView: View {
                                     .stroke(borderColor, lineWidth: 1)
                             )
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .colorScheme(.light)
                     }
 
                     tagsSection
@@ -114,7 +112,6 @@ struct UploadProductView: View {
                 .padding(.bottom, 20)
             }
         }
-        .colorScheme(.light)
         .onAppear {
             analytics.track(.uploadScreenViewed())
         }
@@ -194,7 +191,7 @@ struct UploadProductView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.white)
+                        .background(cardBackground)
                         .overlay(
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
                                 .stroke(borderColor, lineWidth: 1)
@@ -345,7 +342,7 @@ struct UploadProductView: View {
                                             }
                                             .padding(.horizontal, 12)
                                             .padding(.vertical, 10)
-                                            .background(Color.white)
+                                            .background(AppTheme.cardBackground)
                                             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                                         }
                                         .buttonStyle(.plain)
@@ -413,7 +410,6 @@ struct UploadProductView: View {
                         .stroke(borderColor, lineWidth: 1)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .colorScheme(.light)
         }
     }
 }
