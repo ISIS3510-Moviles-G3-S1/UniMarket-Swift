@@ -9,8 +9,10 @@ enum AppTheme {
     static let accent = Color(hex: "72A08A")
     static let accentAlt = Color(hex: "B1B87D")
     static let background = Color(hex: "F2F2F2")
-    static let primaryText = Color.black
-    static let secondaryText = Color.black.opacity(0.6)
+    // Adaptive tokens — resolve correctly in both Light and Dark Mode
+    static let primaryText = Color(UIColor.label)
+    static let secondaryText = Color(UIColor.secondaryLabel)
+    static let cardBackground = Color(UIColor.systemBackground)
 }
 
 extension Font {
