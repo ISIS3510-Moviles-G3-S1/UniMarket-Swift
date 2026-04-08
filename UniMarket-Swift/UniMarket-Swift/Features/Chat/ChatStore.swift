@@ -42,12 +42,18 @@ struct ChatMessage: Identifiable, Hashable {
 struct ChatConversation: Identifiable, Hashable {
     let id: String                  // Firestore document ID
     let participants: [String]      // array of UIDs
+    let initiatedBy: String         // UID of the user who started the conversation (the buyer)
     var otherParticipantName: String
     var otherParticipantAvatar: String?
     var lastMessageText: String
     var lastMessageAt: Date?
     var unreadCount: Int            // computed locally from unread messages
     var listingSnapshot: ChatMessage.ListingSnapshot?
+
+    /// True when the current user is the one who initiated this conversation (i.e. the buyer).
+    var isInitiatedByCurrentUser: Bool {
+        initiatedBy == Auth.auth().currentUser?.uid
+    }
 }
 
 // MARK: - ChatStore
@@ -75,13 +81,14 @@ final class ChatStore: ObservableObject {
         conversationListener = db.collection("conversations")
             .whereField("participants", arrayContains: uid)
             .addSnapshotListener { [weak self] snapshot, error in
-                guard let self, let snapshot else {
+                guard let snapshot else {
                     print("DEBUG ChatStore: conversation listener error \(error?.localizedDescription ?? "")")
-                    self?.isLoading = false
+                    Task { @MainActor in self?.isLoading = false }
                     return
                 }
 
-                Task {
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
                     var updated: [ChatConversation] = []
                     for doc in snapshot.documents {
                         if let conv = await self.parseConversation(doc: doc, currentUID: uid) {
@@ -139,9 +146,13 @@ final class ChatStore: ObservableObject {
         let lastMessageText = data["lastMessageText"] as? String ?? "No messages yet"
         let lastMessageAt = (data["lastMessageAt"] as? Timestamp)?.dateValue()
 
+        // Fall back to first participant for older conversations that don't have initiatedBy
+        let initiatedBy = data["initiatedBy"] as? String ?? participants.first ?? ""
+
         return ChatConversation(
             id: doc.documentID,
             participants: participants,
+            initiatedBy: initiatedBy,
             otherParticipantName: otherName,
             otherParticipantAvatar: otherAvatar,
             lastMessageText: lastMessageText,
@@ -161,18 +172,23 @@ final class ChatStore: ObservableObject {
             .collection("messages")
             .order(by: "sentAt")
             .addSnapshotListener { [weak self] snapshot, error in
-                guard let self, let snapshot else {
+                guard let snapshot else {
                     print("DEBUG ChatStore: message listener error \(error?.localizedDescription ?? "")")
                     return
                 }
 
-                let messages = snapshot.documents.compactMap { self.parseMessage(doc: $0) }
-                self.messagesByConversation[conversationID] = messages
+                // Dispatch property mutations through MainActor to ensure
+                // @Published changes reliably trigger SwiftUI view updates.
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    let messages = snapshot.documents.compactMap { self.parseMessage(doc: $0) }
+                    self.messagesByConversation[conversationID] = messages
 
-                // update unreadCount on the conversation object
-                if let idx = self.conversations.firstIndex(where: { $0.id == conversationID }) {
-                    let unread = messages.filter { !$0.isFromCurrentUser && $0.readAt == nil }.count
-                    self.conversations[idx].unreadCount = unread
+                    // update unreadCount on the conversation object
+                    if let idx = self.conversations.firstIndex(where: { $0.id == conversationID }) {
+                        let unread = messages.filter { !$0.isFromCurrentUser && $0.readAt == nil }.count
+                        self.conversations[idx].unreadCount = unread
+                    }
                 }
             }
 
@@ -188,8 +204,11 @@ final class ChatStore: ObservableObject {
 
     private func parseMessage(doc: QueryDocumentSnapshot) -> ChatMessage? {
         let data = doc.data()
-        guard let senderId = data["senderId"] as? String,
-              let sentAt = (data["sentAt"] as? Timestamp)?.dateValue() else { return nil }
+        guard let senderId = data["senderId"] as? String else { return nil }
+
+        // Use .estimate so locally-written messages (with pending server timestamps)
+        // resolve to an estimated date instead of nil — this lets sent messages render immediately.
+        let sentAt = (doc.get("sentAt", serverTimestampBehavior: .estimate) as? Timestamp)?.dateValue() ?? Date()
 
         let text = data["text"] as? String ?? ""
         let imageURLs = data["imageURLs"] as? [String] ?? []
@@ -256,6 +275,7 @@ final class ChatStore: ObservableObject {
         ]
         let data: [String: Any] = [
             "participants": [uid, sellerID],
+            "initiatedBy": uid,
             "lastMessageText": "",
             "lastMessageAt": FieldValue.serverTimestamp(),
             "listingSnapshot": listingData
@@ -277,6 +297,22 @@ final class ChatStore: ObservableObject {
 
         let msgRef = db.collection("conversations").document(conversationID)
             .collection("messages").document()
+
+        // Optimistic local update — message appears in the UI immediately.
+        let optimistic = ChatMessage(
+            id: msgRef.documentID,
+            senderId: uid,
+            text: trimmed,
+            imageURLs: [],
+            type: .text,
+            sentAt: Date(),
+            readAt: nil,
+            replyTo: replyTo,
+            listingSnapshot: nil
+        )
+        var current = messagesByConversation[conversationID] ?? []
+        current.append(optimistic)
+        messagesByConversation[conversationID] = current
 
         var msgData: [String: Any] = [
             "senderId": uid,
@@ -316,6 +352,22 @@ final class ChatStore: ObservableObject {
             .collection("messages").document()
 
         let imageURL = try await ImageUploadService.uploadMessageImage(image, messageId: msgRef.documentID)
+
+        // Optimistic local update — image message appears immediately after upload.
+        let optimistic = ChatMessage(
+            id: msgRef.documentID,
+            senderId: uid,
+            text: "",
+            imageURLs: [imageURL],
+            type: .image,
+            sentAt: Date(),
+            readAt: nil,
+            replyTo: nil,
+            listingSnapshot: nil
+        )
+        var current = messagesByConversation[conversationID] ?? []
+        current.append(optimistic)
+        messagesByConversation[conversationID] = current
 
         let msgData: [String: Any] = [
             "senderId": uid,

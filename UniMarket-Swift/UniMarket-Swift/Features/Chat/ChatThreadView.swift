@@ -110,10 +110,17 @@ struct ChatThreadView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(listing.title)
-                    .font(.poppinsSemiBold(12))
-                    .foregroundStyle(AppTheme.primaryText)
-                    .lineLimit(1)
+                HStack(spacing: 0) {
+                    Text(conversation?.isInitiatedByCurrentUser == true
+                         ? "Asking about "
+                         : "Interested in ")
+                        .font(.poppinsRegular(11))
+                        .foregroundStyle(AppTheme.secondaryText)
+                    Text(listing.title)
+                        .font(.poppinsSemiBold(12))
+                        .foregroundStyle(AppTheme.primaryText)
+                }
+                .lineLimit(1)
                 Text("$\(listing.price)")
                     .font(.poppinsRegular(11))
                     .foregroundStyle(AppTheme.secondaryText)
@@ -285,6 +292,15 @@ private struct MessageBubble: View {
                     ForEach(message.imageURLs, id: \.self) { urlString in
                         if let url = URL(string: urlString) {
                             KFImage(url)
+                                .placeholder {
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(Color.gray.opacity(0.15))
+                                        .frame(width: 200, height: 150)
+                                        .overlay {
+                                            ProgressView()
+                                        }
+                                }
+                                .fade(duration: 0.2)
                                 .resizable()
                                 .scaledToFill()
                                 .frame(maxWidth: 220, maxHeight: 220)
