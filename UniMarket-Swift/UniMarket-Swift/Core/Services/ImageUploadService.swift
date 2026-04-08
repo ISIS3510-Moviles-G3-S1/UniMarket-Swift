@@ -47,7 +47,7 @@ struct ImageUploadService {
     }
 
     // MARK: - Upload message image
-    static func uploadMessageImage(_ image: UIImage, messageId: String) async throws -> String {
+    static func uploadMessageImage(_ image: UIImage, messageId: String, index: Int = 0) async throws -> String {
         guard let uid = Auth.auth().currentUser?.uid else {
             throw ImageUploadError.notAuthenticated
         }
@@ -56,7 +56,7 @@ struct ImageUploadService {
         }
 
         let ref = Storage.storage().reference()
-            .child("messages/\(uid)/\(messageId)/image_0.jpg")
+            .child("messages/\(uid)/\(messageId)/image_\(index).jpg")
 
         do {
             _ = try await ref.putDataAsync(imageData)

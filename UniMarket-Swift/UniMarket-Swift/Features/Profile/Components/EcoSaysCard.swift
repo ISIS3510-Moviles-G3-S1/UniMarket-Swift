@@ -14,7 +14,7 @@ struct EcoSaysCard: View {
     @Environment(\.colorScheme) private var colorScheme
 
     private var imageBackground: Color {
-        AppTheme.cardBackground
+        .white
     }
 
     private var displayMessage: String {

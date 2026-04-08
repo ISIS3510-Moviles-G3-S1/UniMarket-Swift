@@ -55,10 +55,17 @@ struct ChatInboxView: View {
                                 .foregroundStyle(AppTheme.primaryText)
 
                             if let listing = conversation.listingSnapshot {
-                                Text(listing.title)
-                                    .font(.poppinsRegular(11))
-                                    .foregroundStyle(AppTheme.accent)
-                                    .lineLimit(1)
+                                HStack(spacing: 0) {
+                                    Text(conversation.isInitiatedByCurrentUser
+                                         ? "Asking about "
+                                         : "Interested in ")
+                                        .font(.poppinsRegular(11))
+                                        .foregroundStyle(AppTheme.secondaryText)
+                                    Text(listing.title)
+                                        .font(.poppinsSemiBold(11))
+                                        .foregroundStyle(AppTheme.accent)
+                                }
+                                .lineLimit(1)
                             }
 
                             Text(conversation.lastMessageText)

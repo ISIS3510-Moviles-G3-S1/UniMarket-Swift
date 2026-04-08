@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Combine
+import FirebaseAuth
 
 final class SearchViewModel: ObservableObject {
     enum SearchSection: String, CaseIterable, Identifiable {
@@ -147,7 +148,8 @@ final class SearchViewModel: ObservableObject {
     }
 
     func updateProducts(_ products: [Product]) {
-        self.products = products
+        let uid = Auth.auth().currentUser?.uid
+        self.products = products.filter { $0.sellerId != uid }
     }
 
     func selectTag(_ tag: String?) {
