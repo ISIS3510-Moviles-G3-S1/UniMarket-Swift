@@ -99,8 +99,55 @@ final class ChatStore: ObservableObject {
                         ($0.lastMessageAt ?? .distantPast) > ($1.lastMessageAt ?? .distantPast)
                     }
                     self.isLoading = false
+                    
+                    // Start listening to all conversations for unread count updates
+                    self.startListeningToAllConversationsForUnreadCounts(uid: uid)
                 }
             }
+    }
+    
+    // MARK: - Listen to all conversations for unread counts
+    
+    private func startListeningToAllConversationsForUnreadCounts(uid: String) {
+        // For each conversation, ensure we're listening to its messages
+        // (but only if we're not already listening)
+        for conversation in conversations {
+            // Skip if we're already listening to this conversation
+            guard messageListeners[conversation.id] == nil else { continue }
+            
+            // Set up a lightweight listener just for unread count tracking
+            startObservingMessagesForUnreadCount(conversationID: conversation.id, uid: uid)
+        }
+    }
+    
+    private func startObservingMessagesForUnreadCount(conversationID: String, uid: String) {
+        // Don't set up duplicate listeners
+        guard messageListeners[conversationID] == nil else { return }
+        
+        let listener = db.collection("conversations")
+            .document(conversationID)
+            .collection("messages")
+            .order(by: "sentAt")
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let snapshot else {
+                    print("DEBUG ChatStore: unread count listener error \(error?.localizedDescription ?? "")")
+                    return
+                }
+
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    let messages = snapshot.documents.compactMap { self.parseMessage(doc: $0) }
+                    self.messagesByConversation[conversationID] = messages
+
+                    // Update unread count on the conversation object
+                    if let idx = self.conversations.firstIndex(where: { $0.id == conversationID }) {
+                        let unread = messages.filter { !$0.isFromCurrentUser && $0.readAt == nil }.count
+                        self.conversations[idx].unreadCount = unread
+                    }
+                }
+            }
+
+        messageListeners[conversationID] = listener
     }
 
     func stopObservingConversations() {
@@ -163,41 +210,23 @@ final class ChatStore: ObservableObject {
     }
 
     // MARK: - Observe messages in a thread
-
+    
+    /// This is called when the user opens a specific chat thread.
+    /// The listener is already set up by startListeningToAllConversationsForUnreadCounts,
+    /// so this method just ensures the listener exists.
     func startObservingMessages(for conversationID: String) {
+        // If listener already exists (from unread count tracking), we're good
         guard messageListeners[conversationID] == nil else { return }
-
-        let listener = db.collection("conversations")
-            .document(conversationID)
-            .collection("messages")
-            .order(by: "sentAt")
-            .addSnapshotListener { [weak self] snapshot, error in
-                guard let snapshot else {
-                    print("DEBUG ChatStore: message listener error \(error?.localizedDescription ?? "")")
-                    return
-                }
-
-                // Dispatch property mutations through MainActor to ensure
-                // @Published changes reliably trigger SwiftUI view updates.
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    let messages = snapshot.documents.compactMap { self.parseMessage(doc: $0) }
-                    self.messagesByConversation[conversationID] = messages
-
-                    // update unreadCount on the conversation object
-                    if let idx = self.conversations.firstIndex(where: { $0.id == conversationID }) {
-                        let unread = messages.filter { !$0.isFromCurrentUser && $0.readAt == nil }.count
-                        self.conversations[idx].unreadCount = unread
-                    }
-                }
-            }
-
-        messageListeners[conversationID] = listener
+        
+        // Otherwise set up the listener (shouldn't normally happen, but defensive)
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        startObservingMessagesForUnreadCount(conversationID: conversationID, uid: uid)
     }
 
     func stopObservingMessages(for conversationID: String) {
-        messageListeners[conversationID]?.remove()
-        messageListeners.removeValue(forKey: conversationID)
+        // Don't remove the listener when leaving a chat thread
+        // We want to keep it active for unread count tracking
+        // The listener will be removed when stopObservingConversations() is called
     }
 
     // MARK: - Parse a message document

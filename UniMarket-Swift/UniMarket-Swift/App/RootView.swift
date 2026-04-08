@@ -15,6 +15,7 @@ private enum AuthRoute: Hashable {
 struct RootView: View {
     @EnvironmentObject var session: SessionManager
     @EnvironmentObject private var productStore: ProductStore
+    @EnvironmentObject private var chatStore: ChatStore
     @State private var authPath: [AuthRoute] = []
 
     var body: some View {
@@ -39,10 +40,19 @@ struct RootView: View {
             .onChange(of: session.isLoggedIn) { _, loggedIn in
                 if loggedIn {
                     authPath = []
+                    // Start observing chat conversations when user logs in
+                    chatStore.startObservingConversations()
+                } else {
+                    // Stop observing when user logs out
+                    chatStore.stopObservingConversations()
                 }
             }
             .onAppear {
                 syncListingReminder(for: session.user?.uid)
+                // Start observing conversations if already logged in
+                if session.isLoggedIn {
+                    chatStore.startObservingConversations()
+                }
             }
             .onChange(of: session.user?.uid) { previousUserID, currentUserID in
                 if let previousUserID, previousUserID != currentUserID {

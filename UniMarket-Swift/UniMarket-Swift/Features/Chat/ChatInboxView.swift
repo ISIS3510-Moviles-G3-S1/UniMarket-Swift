@@ -19,10 +19,8 @@ struct ChatInboxView: View {
         .background(AppTheme.background)
         .navigationTitle("Inbox")
         .onAppear {
+            // Ensure listeners are active (they should already be from RootView)
             chatStore.startObservingConversations()
-        }
-        .onDisappear {
-            chatStore.stopObservingConversations()
         }
     }
 

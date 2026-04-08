@@ -6,7 +6,7 @@ actor ListingReminderService {
 
     private let center = UNUserNotificationCenter.current()
     private let defaults = UserDefaults.standard
-    private let reminderInterval: TimeInterval = 60 * 60 * 24 * 7
+    private let reminderInterval: TimeInterval = 60 //* 60 * 24 * 7
 
     private init() {}
 
