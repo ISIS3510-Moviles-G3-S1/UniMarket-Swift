@@ -20,6 +20,7 @@ final class ProductDetailViewModel: ObservableObject {
     @Published var title: String
     @Published var price: Int
     @Published var conditionText: String
+    @Published var status: ProductStatus
     @Published var isFavorite: Bool
     @Published var tags: [String]
 
@@ -42,6 +43,7 @@ final class ProductDetailViewModel: ObservableObject {
         }
         self.sellerName = product.sellerName
         self.conditionText = isOwnListing ? product.status.rawValue : product.conditionTag
+        self.status = product.status
         self.rating = isOwnListing ? nil : product.rating
         self.isFavorite = product.isFavorite
         self.isOwnListing = isOwnListing
@@ -66,6 +68,7 @@ final class ProductDetailViewModel: ObservableObject {
         title = updated.title
         price = updated.price
         conditionText = updated.status.rawValue
+        status = updated.status
         tags = updated.tags
     }
 
@@ -74,6 +77,7 @@ final class ProductDetailViewModel: ObservableObject {
         title = updated.title
         price = updated.price
         conditionText = isOwnListing ? updated.status.rawValue : updated.conditionTag
+        status = updated.status
         isFavorite = updated.isFavorite
         tags = updated.tags
         if isOwnListing {

@@ -6,8 +6,6 @@
 	<string>$(OpenRouterAPI)</string>
 	<key>NSCameraUsageDescription</key>
 	<string>UniMarket needs camera access to scan QR codes for pickup confirmation.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>UniMarket needs camera access to scan QR codes for pickup confirmation.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Poppins-SemiBold.ttf</string>

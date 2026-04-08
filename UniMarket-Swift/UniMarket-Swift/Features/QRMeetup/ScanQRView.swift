@@ -18,7 +18,7 @@ struct ScanQRView: View {
 
     enum ScanState {
         case scanning
-        case confirming(listingId: String, sellerId: String)
+        case confirming(transactionId: String)
         case loading
         case confirmed
         case error(String)
@@ -31,8 +31,8 @@ struct ScanQRView: View {
             switch scanState {
             case .scanning:
                 scanningView
-            case .confirming(let listingId, let sellerId):
-                confirmingView(listingId: listingId, sellerId: sellerId)
+            case .confirming(let transactionId):
+                confirmingView(transactionId: transactionId)
             case .loading:
                 loadingView
             case .confirmed:
@@ -74,7 +74,7 @@ struct ScanQRView: View {
         .padding(24)
     }
 
-    private func confirmingView(listingId: String, sellerId: String) -> some View {
+    private func confirmingView(transactionId: String) -> some View {
         VStack(spacing: 20) {
             Image(systemName: "qrcode.viewfinder")
                 .font(.system(size: 60))
@@ -84,9 +84,20 @@ struct ScanQRView: View {
                 .font(.poppinsBold(22))
                 .foregroundStyle(AppTheme.primaryText)
 
-            Text("Confirm pickup for this listing?")
+            Text("Confirm pickup for this transaction?")
                 .font(.poppinsRegular(14))
                 .foregroundStyle(AppTheme.secondaryText)
+
+            VStack(spacing: 4) {
+                Text("Transaction ID")
+                    .font(.poppinsRegular(11))
+                    .foregroundStyle(AppTheme.secondaryText)
+                Text(transactionId)
+                    .font(.poppinsSemiBold(12))
+                    .foregroundStyle(AppTheme.primaryText)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
 
             HStack(spacing: 12) {
                 Button("Scan Again") { scanState = .scanning }
@@ -98,7 +109,7 @@ struct ScanQRView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
                 Button("Confirm") {
-                    Task { await confirmPickup(listingId: listingId, sellerId: sellerId) }
+                    Task { await confirmPickup(transactionId: transactionId) }
                 }
                 .font(.poppinsSemiBold(16))
                 .foregroundStyle(.white)
@@ -187,31 +198,40 @@ struct ScanQRView: View {
     // MARK: - Logic
 
     private func handleScannedCode(_ code: String) {
-        guard
-            let data = code.data(using: .utf8),
-            let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
-            let listingId = json["listingId"], !listingId.isEmpty,
-            let sellerId = json["sellerId"], !sellerId.isEmpty
-        else {
+        let transactionId = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !transactionId.isEmpty else {
             scanState = .error("Invalid QR code. Please scan a valid UniMarket QR.")
             return
         }
-        scanState = .confirming(listingId: listingId, sellerId: sellerId)
+        scanState = .confirming(transactionId: transactionId)
     }
 
-    private func confirmPickup(listingId: String, sellerId: String) async {
-        guard let buyerId = Auth.auth().currentUser?.uid else {
+    private func confirmPickup(transactionId: String) async {
+        guard let currentUID = Auth.auth().currentUser?.uid else {
             await MainActor.run { scanState = .error("You must be logged in to confirm a pickup.") }
             return
         }
         await MainActor.run { scanState = .loading }
         do {
-            try await Firestore.firestore().collection("meetup_transactions").addDocument(data: [
-                "listingId": listingId,
-                "sellerId": sellerId,
-                "buyerId": buyerId,
+            let db = Firestore.firestore()
+            let ref = db.collection("meetup_transactions").document(transactionId)
+            let doc = try await ref.getDocument()
+
+            guard doc.exists, let data = doc.data() else {
+                await MainActor.run { scanState = .error("Transaction not found. Please scan a valid QR.") }
+                return
+            }
+            guard let buyerId = data["buyerId"] as? String, buyerId == currentUID else {
+                await MainActor.run { scanState = .error("This QR was not generated for your account.") }
+                return
+            }
+            guard let status = data["status"] as? String, status == "pending" else {
+                await MainActor.run { scanState = .error("This transaction has already been confirmed or is no longer valid.") }
+                return
+            }
+
+            try await ref.updateData([
                 "status": "confirmed",
-                "createdAt": FieldValue.serverTimestamp(),
                 "confirmedAt": FieldValue.serverTimestamp()
             ])
             await MainActor.run { scanState = .confirmed }

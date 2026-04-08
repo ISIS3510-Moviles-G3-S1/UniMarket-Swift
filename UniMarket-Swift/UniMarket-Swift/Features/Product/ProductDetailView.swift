@@ -151,7 +151,9 @@ struct ProductDetailView: View {
             }
         }
         .sheet(isPresented: $showGenerateQR) {
-            GenerateQRView(listingId: vm.id, sellerId: vm.sellerId)
+            NavigationStack {
+                GenerateQRView(listingId: vm.id, sellerId: vm.sellerId, listingStatus: vm.status)
+            }
         }
         .sheet(isPresented: $showScanQR) {
             ScanQRView()
