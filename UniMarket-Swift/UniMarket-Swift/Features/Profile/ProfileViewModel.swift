@@ -27,10 +27,8 @@ final class ProfileViewModel: ObservableObject {
     }
 
     enum SalesPeriod: String, CaseIterable {
-        case today = "Today"
-        case thisWeek = "This Week"
+        case fifteenDays = "15 Days"
         case thisMonth = "This Month"
-        case thisYear = "This Year"
     }
 
     @Published var selectedTab: Tab = .activity
@@ -411,14 +409,10 @@ final class ProfileViewModel: ObservableObject {
         let now = Date()
         let cutoff: Date
         switch selectedSalesPeriod {
-        case .today:
-            cutoff = calendar.startOfDay(for: now)
-        case .thisWeek:
-            cutoff = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)) ?? now
+        case .fifteenDays:
+            cutoff = calendar.date(byAdding: .day, value: -15, to: now) ?? now
         case .thisMonth:
             cutoff = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? now
-        case .thisYear:
-            cutoff = calendar.date(from: calendar.dateComponents([.year], from: now)) ?? now
         }
         return listings.filter { $0.soldAt.map { $0 >= cutoff } ?? false }.count
     }
