@@ -21,6 +21,10 @@ struct UploadProductView: View {
     @State private var showCamera = false
     @State private var showClothingAnalysis = false
     @State private var isTagPickerExpanded = false
+    
+    // Optional: Pre-fill data from AI analysis
+    var aiAnalysisImage: UIImage?
+    var aiAnalysisTags: [String]?
 
     private let conditions = ["Good", "Like New"]
     private let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
@@ -114,6 +118,14 @@ struct UploadProductView: View {
         }
         .onAppear {
             analytics.track(.uploadScreenViewed())
+            
+            // Pre-fill data from AI analysis if available
+            if let image = aiAnalysisImage {
+                vm.addImageFromCamera(image)
+            }
+            if let tags = aiAnalysisTags {
+                vm.selectedTags = tags
+            }
         }
         .onChange(of: vm.selectedItems) { _, _ in
             analytics.track(.listingPhotosSelected(count: vm.selectedItems.count, source: "gallery"))

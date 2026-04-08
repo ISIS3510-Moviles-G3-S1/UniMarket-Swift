@@ -6,6 +6,12 @@ import FirebaseStorage
 import UIKit
 import Kingfisher
 
+// MARK: - Notification Names
+extension Notification.Name {
+    static let userDidCreateListing = Notification.Name("userDidCreateListing")
+    static let userDidSellListing = Notification.Name("userDidSellListing")
+}
+
 struct CreateProductInput {
     let title: String
     let price: Int
@@ -104,6 +110,9 @@ final class ProductService {
             photoCount: input.imagesData.count,
             priceBucket: priceBucket(for: product.price)
         ))
+        
+        // Notify that user created a new listing
+        NotificationCenter.default.post(name: .userDidCreateListing, object: nil)
 
         return product
     }
@@ -129,6 +138,9 @@ final class ProductService {
                 sellerID: product.sellerId,
                 priceBucket: priceBucket(for: product.price)
             ))
+            
+            // Notify that user sold a listing
+            NotificationCenter.default.post(name: .userDidSellListing, object: nil)
         }
     }
 

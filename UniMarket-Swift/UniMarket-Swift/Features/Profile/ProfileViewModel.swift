@@ -60,28 +60,43 @@ final class ProfileViewModel: ObservableObject {
         static let cachedProfilePic = "profile.cached.profilePic"
         static let cachedMemberSince = "profile.cached.memberSince"
         static let staticSeedUID = "profile.static.seed.uid"
-        static let ecoMessageHash = "profile.eco.message.hash"
-        static let ecoMessageTimestamp = "profile.eco.message.timestamp"
-    }
-    
-    private struct EcoMessageRequest {
-        let displayName: String
-        let rating: Double
-        let xp: Int
-        let levelTitle: String
-        let xpToNext: Int
-        let soldCount: Int
-        let transactions: Int
-        
-        func hash() -> String {
-            let content = "\(displayName):\(rating):\(xp):\(levelTitle):\(xpToNext):\(soldCount):\(transactions)"
-            return String(content.hashValue)
-        }
+        static let ecoMessageText = "profile.eco.message.text"
+        static let ecoMessageListingsCount = "profile.eco.message.listingsCount"
+        static let ecoMessageSoldCount = "profile.eco.message.soldCount"
     }
     
     init() {
         hydrateFromCache()
         setupSubscribers()
+        setupNotificationObservers()
+    }
+    
+    private func setupNotificationObservers() {
+        // Listen for when user creates a new listing
+        NotificationCenter.default.addObserver(
+            forName: .userDidCreateListing,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.onListingEvent()
+        }
+        
+        // Listen for when user sells a listing
+        NotificationCenter.default.addObserver(
+            forName: .userDidSellListing,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.onListingEvent()
+        }
+    }
+    
+    private func onListingEvent() {
+        print("DEBUG[ProfileVM] Listing event detected - will refresh eco message")
+        Task {
+            await fetchMyListings()
+            await refreshPersonalizedEcoMessage(reason: "listing_event")
+        }
     }
     
     func setupSubscribers() {
@@ -118,7 +133,6 @@ final class ProfileViewModel: ObservableObject {
         if xp != user.xpPoints {
             xp = user.xpPoints
             xpToNext = levelInfo.xpToNext
-            updateEcoMessage(xp: user.xpPoints)
             didChange = true
         }
         
@@ -140,7 +154,9 @@ final class ProfileViewModel: ObservableObject {
         }
         
         await fetchMyListings()
-        await refreshPersonalizedEcoMessageIfNeeded(force: true)
+        
+        // Always refresh on profile tab launch (will use cache if appropriate)
+        await refreshPersonalizedEcoMessage(reason: "app_launch")
     }
     
     func fetchMyListings() async {
@@ -168,7 +184,13 @@ final class ProfileViewModel: ObservableObject {
         
         let levelInfo = calculateLevelInfo(xp: xp)
         xpToNext = levelInfo.xpToNext
-        updateEcoMessage(xp: xp)
+        
+        // Load cached eco message if available
+        if let cachedMessage = defaults.string(forKey: CacheKey.ecoMessageText), !cachedMessage.isEmpty {
+            ecoMessage = cachedMessage
+        } else {
+            updateEcoMessage(xp: xp)
+        }
     }
     
     private func applyDynamicFields(_ user: User) {
@@ -196,14 +218,7 @@ final class ProfileViewModel: ObservableObject {
             defaults.set(user.xpPoints, forKey: CacheKey.dynamicXP)
         }
         
-        updateEcoMessage(xp: user.xpPoints)
-
-        // Only refresh if data actually changed (not on every subscriber update)
-        if dataChanged {
-            Task { [weak self] in
-                await self?.refreshPersonalizedEcoMessageIfNeeded(force: false)
-            }
-        }
+        // Don't call updateEcoMessage here - let the cached AI message persist
     }
     
     private func updateDisplayIdentityIfChanged(_ user: User) {
@@ -257,6 +272,14 @@ final class ProfileViewModel: ObservableObject {
     }
     
     func updateEcoMessage(xp: Int) {
+        // Don't overwrite AI-generated messages with the generic fallback
+        let defaults = UserDefaults.standard
+        if let cachedMessage = defaults.string(forKey: CacheKey.ecoMessageText), !cachedMessage.isEmpty {
+            // We have an AI-generated message cached, don't replace it
+            return
+        }
+        
+        // Only use generic message if no AI message exists
         let levelInfo = calculateLevelInfo(xp: xp)
         if xp >= 1000 {
             ecoMessage = "You're a Sustainability Star! You've reached the top level. Keep leading the way!"
@@ -266,8 +289,8 @@ final class ProfileViewModel: ObservableObject {
     }
 
     @MainActor
-    private func refreshPersonalizedEcoMessageIfNeeded(force: Bool) async {
-        print("DEBUG[ProfileVM] refreshPersonalizedEcoMessageIfNeeded called force=\(force)")
+    private func refreshPersonalizedEcoMessage(reason: String) async {
+        print("DEBUG[ProfileVM] refreshPersonalizedEcoMessage called reason=\(reason)")
 
         guard APIConfig.isOpenRouterConfigured() else {
             print("DEBUG[ProfileVM] OpenRouter not configured. Skipping personalization.")
@@ -279,29 +302,18 @@ final class ProfileViewModel: ObservableObject {
         }
 
         let levelInfo = calculateLevelInfo(xp: xp)
+        let listingsCount = listings.count
         let soldCount = listings.filter { $0.soldAt != nil }.count
-        let currentRequest = EcoMessageRequest(
-            displayName: displayName,
-            rating: rating,
-            xp: xp,
-            levelTitle: levelInfo.title,
-            xpToNext: max(0, levelInfo.xpToNext),
-            soldCount: soldCount,
-            transactions: transactions
-        )
         
-        // Check if we should skip due to unchanged data and recent request
-        if !force {
-            let defaults = UserDefaults.standard
-            let lastHash = defaults.string(forKey: CacheKey.ecoMessageHash) ?? ""
-            let lastTimestamp = defaults.double(forKey: CacheKey.ecoMessageTimestamp)
-            let timeSinceLastRequest = Date().timeIntervalSince1970 - lastTimestamp
-            let minTimeBetweenRequests: TimeInterval = 300 // 5 minutes
-            
-            if lastHash == currentRequest.hash() && timeSinceLastRequest < minTimeBetweenRequests {
-                print("DEBUG[ProfileVM] Data unchanged and recent request exists. Skipping personalization.")
-                return
-            }
+        // Check if counts have changed since last generation
+        let defaults = UserDefaults.standard
+        let lastListingsCount = defaults.integer(forKey: CacheKey.ecoMessageListingsCount)
+        let lastSoldCount = defaults.integer(forKey: CacheKey.ecoMessageSoldCount)
+        
+        // Skip if coming from app_launch and counts haven't changed
+        if reason == "app_launch" && listingsCount == lastListingsCount && soldCount == lastSoldCount {
+            print("DEBUG[ProfileVM] Counts unchanged since last generation (listings=\(listingsCount), sold=\(soldCount)). Using cached message.")
+            return
         }
 
         isGeneratingEcoMessage = true
@@ -314,20 +326,21 @@ final class ProfileViewModel: ObservableObject {
         XP: \(xp)
         Sustainability level: \(levelInfo.title)
         XP to next level: \(max(0, levelInfo.xpToNext))
+        Total listings created: \(listingsCount)
         Number of listings sold: \(soldCount)
         Total transactions: \(transactions)
         """
 
-        print("DEBUG[ProfileVM] Sending personalization request soldCount=\(soldCount) transactions=\(transactions) xp=\(xp)")
+        print("DEBUG[ProfileVM] Sending personalization request reason=\(reason) listings=\(listingsCount) sold=\(soldCount) xp=\(xp)")
 
         do {
             let response = try await OpenRouterService.shared.generateEcoRecommendation(prompt: prompt)
             ecoMessage = response
             
-            // Cache the request details
-            let defaults = UserDefaults.standard
-            defaults.set(currentRequest.hash(), forKey: CacheKey.ecoMessageHash)
-            defaults.set(Date().timeIntervalSince1970, forKey: CacheKey.ecoMessageTimestamp)
+            // Cache the message and current counts
+            defaults.set(response, forKey: CacheKey.ecoMessageText)
+            defaults.set(listingsCount, forKey: CacheKey.ecoMessageListingsCount)
+            defaults.set(soldCount, forKey: CacheKey.ecoMessageSoldCount)
             
             print("DEBUG[ProfileVM] Personalized ecoMessage updated chars=\(response.count)")
         } catch {
