@@ -55,7 +55,7 @@ struct ChatInboxView: View {
                             if let listing = conversation.listingSnapshot {
                                 HStack(spacing: 0) {
                                     Text(conversation.isInitiatedByCurrentUser
-                                         ? "Asking about "
+                                         ? "You're asking about "
                                          : "Interested in ")
                                         .font(.poppinsRegular(11))
                                         .foregroundStyle(AppTheme.secondaryText)

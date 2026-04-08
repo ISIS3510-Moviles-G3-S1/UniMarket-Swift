@@ -12,6 +12,8 @@ struct ClothingAnalysisView: View {
     @StateObject private var viewModel = ClothingAnalysisViewModel()
     @State private var showImagePicker = false
     @State private var imagePickerSource: ImageSourceType = .camera
+    @State private var navigateToUpload = false
+    @Environment(\.dismiss) private var dismiss
     
     enum ImageSourceType {
         case camera
@@ -32,6 +34,12 @@ struct ClothingAnalysisView: View {
         }
         .navigationTitle("Clothing Analysis")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(isPresented: $navigateToUpload) {
+            UploadProductView(
+                aiAnalysisImage: viewModel.selectedImage,
+                aiAnalysisTags: viewModel.editableTags.map { $0.name }
+            )
+        }
     }
     
     // MARK: - Initial State View
@@ -287,7 +295,7 @@ struct ClothingAnalysisView: View {
                 VStack(spacing: 12) {
                     Button(action: {
                         viewModel.logListingCreationStart()
-                        // TODO: Navigate to create listing screen with tags
+                        navigateToUpload = true
                     }) {
                         HStack {
                             Image(systemName: "plus.circle.fill")
@@ -302,8 +310,7 @@ struct ClothingAnalysisView: View {
                     }
                     
                     Button(action: {
-                        imagePickerSource = .camera
-                        showImagePicker = true
+                        viewModel.clearResults()
                     }) {
                         HStack {
                             Image(systemName: "arrow.clockwise")
@@ -330,26 +337,6 @@ struct ClothingAnalysisView: View {
             .padding(.vertical, 16)
         }
         .backgroundColor(AppTheme.background)
-        .sheet(isPresented: $showImagePicker) {
-            if imagePickerSource == .camera {
-                ClothingAnalysisImagePicker(
-                    isPresented: $showImagePicker,
-                    image: $viewModel.selectedImage,
-                    sourceType: .camera,
-                    onImageSelected: { image in
-                        viewModel.analyzeImage(image)
-                    }
-                )
-            } else {
-                PhotoLibraryPicker(
-                    isPresented: $showImagePicker,
-                    image: $viewModel.selectedImage,
-                    onImageSelected: { image in
-                        viewModel.analyzeImage(image)
-                    }
-                )
-            }
-        }
     }
 
     // MARK: - Error View
