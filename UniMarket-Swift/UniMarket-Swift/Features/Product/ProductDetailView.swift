@@ -16,6 +16,8 @@ struct ProductDetailView: View {
     @State private var editingProduct: Product?
     @State private var chatConversationID: String?
     @State private var isStartingChat = false
+    @State private var showGenerateQR = false
+    @State private var showScanQR = false
 
     private let onProductUpdated: ((Product) -> Void)?
 
@@ -148,6 +150,14 @@ struct ProductDetailView: View {
                     .environmentObject(chatStore)
             }
         }
+        .sheet(isPresented: $showGenerateQR) {
+            NavigationStack {
+                GenerateQRView(listingId: vm.id, sellerId: vm.sellerId, listingStatus: vm.status)
+            }
+        }
+        .sheet(isPresented: $showScanQR) {
+            ScanQRView()
+        }
     }
 
     // MARK: - Image header
@@ -187,17 +197,35 @@ struct ProductDetailView: View {
     @ViewBuilder
     private var actionButtons: some View {
         if vm.isOwnListing {
-            Button("Edit Listing") {
-                editingProduct = vm.editableProduct()
+            VStack(spacing: 10) {
+                Button("Edit Listing") {
+                    editingProduct = vm.editableProduct()
+                }
+                .font(.poppinsSemiBold(16))
+                .foregroundStyle(AppTheme.primaryText)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(AppTheme.accentAlt)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                Button {
+                    showGenerateQR = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "qrcode")
+                        Text("Generate QR Code")
+                    }
+                    .font(.poppinsSemiBold(16))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(AppTheme.accent)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
             }
-            .font(.poppinsSemiBold(16))
-            .foregroundStyle(AppTheme.primaryText)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(AppTheme.accentAlt)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         } else {
-            HStack(spacing: 12) {
+            VStack(spacing: 10) {
+                HStack(spacing: 12) {
                 // MARK: Favorite button
                 Button {
                     let nextFavoriteState = !vm.isFavorite
@@ -266,6 +294,23 @@ struct ProductDetailView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
             }
+
+            // MARK: Scan QR button (buyer)
+            Button {
+                showScanQR = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "qrcode.viewfinder")
+                    Text("Scan QR to Confirm Pickup")
+                }
+                .font(.poppinsSemiBold(16))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(AppTheme.accent)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            } // end VStack (buyer)
         }
     }
 
