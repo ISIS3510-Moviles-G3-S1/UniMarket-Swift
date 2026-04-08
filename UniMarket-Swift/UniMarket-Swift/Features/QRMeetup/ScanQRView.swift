@@ -2,7 +2,7 @@
 //  ScanQRView.swift
 //  UniMarket-Swift
 //
-//  NOTE: Add NSCameraUsageDescription to Info.plist before running on device.
+//  Created by Joseph Linares on 17/03/26.
 //
 
 import SwiftUI

@@ -2,6 +2,8 @@
 //  GenerateQRView.swift
 //  UniMarket-Swift
 //
+//  Created by Joseph Linares on 17/03/26.
+//
 
 import SwiftUI
 import CoreImage.CIFilterBuiltins

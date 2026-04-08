@@ -1,8 +1,8 @@
 //
-//  ClothingCategoryMapper.swift
+//  ClothingTag.swift
 //  UniMarket-Swift
 //
-//  Created by FELIPE MESA on 19/03/26.
+//  Created by Joseph Linares on 17/03/26.
 //
 
 import Foundation
