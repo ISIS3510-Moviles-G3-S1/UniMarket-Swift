@@ -2,33 +2,21 @@
 //  ScanQRView.swift
 //  UniMarket-Swift
 //
-//  Created by Joseph Linares on 17/03/26.
+//  NOTE: NSCameraUsageDescription must be set in Info.plist.
 //
 
 import SwiftUI
 import AVFoundation
-import FirebaseAuth
-import FirebaseFirestore
-
-// MARK: - Main View
 
 struct ScanQRView: View {
+    @StateObject private var vm = ScanQRViewModel()
     @Environment(\.dismiss) private var dismiss
-    @State private var scanState: ScanState = .scanning
-
-    enum ScanState {
-        case scanning
-        case confirming(transactionId: String)
-        case loading
-        case confirmed
-        case error(String)
-    }
 
     var body: some View {
         ZStack {
             AppTheme.background.ignoresSafeArea()
 
-            switch scanState {
+            switch vm.scanState {
             case .scanning:
                 scanningView
             case .confirming(let transactionId):
@@ -58,7 +46,7 @@ struct ScanQRView: View {
             }
 
             QRScannerRepresentable { code in
-                handleScannedCode(code)
+                vm.handleScannedCode(code)
             }
             .frame(height: 320)
             .clipShape(RoundedRectangle(cornerRadius: 18))
@@ -100,7 +88,7 @@ struct ScanQRView: View {
             }
 
             HStack(spacing: 12) {
-                Button("Scan Again") { scanState = .scanning }
+                Button("Scan Again") { vm.resetScanning() }
                     .font(.poppinsSemiBold(16))
                     .foregroundStyle(AppTheme.primaryText)
                     .frame(maxWidth: .infinity)
@@ -109,7 +97,7 @@ struct ScanQRView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
                 Button("Confirm") {
-                    Task { await confirmPickup(transactionId: transactionId) }
+                    Task { await vm.confirmPickup(transactionId: transactionId) }
                 }
                 .font(.poppinsSemiBold(16))
                 .foregroundStyle(.white)
@@ -175,7 +163,7 @@ struct ScanQRView: View {
                 .multilineTextAlignment(.center)
 
             HStack(spacing: 12) {
-                Button("Try Again") { scanState = .scanning }
+                Button("Try Again") { vm.resetScanning() }
                     .font(.poppinsSemiBold(16))
                     .foregroundStyle(AppTheme.primaryText)
                     .frame(maxWidth: .infinity)
@@ -193,51 +181,6 @@ struct ScanQRView: View {
             }
         }
         .padding(24)
-    }
-
-    // MARK: - Logic
-
-    private func handleScannedCode(_ code: String) {
-        let transactionId = code.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !transactionId.isEmpty else {
-            scanState = .error("Invalid QR code. Please scan a valid UniMarket QR.")
-            return
-        }
-        scanState = .confirming(transactionId: transactionId)
-    }
-
-    private func confirmPickup(transactionId: String) async {
-        guard let currentUID = Auth.auth().currentUser?.uid else {
-            await MainActor.run { scanState = .error("You must be logged in to confirm a pickup.") }
-            return
-        }
-        await MainActor.run { scanState = .loading }
-        do {
-            let db = Firestore.firestore()
-            let ref = db.collection("meetup_transactions").document(transactionId)
-            let doc = try await ref.getDocument()
-
-            guard doc.exists, let data = doc.data() else {
-                await MainActor.run { scanState = .error("Transaction not found. Please scan a valid QR.") }
-                return
-            }
-            guard let buyerId = data["buyerId"] as? String, buyerId == currentUID else {
-                await MainActor.run { scanState = .error("This QR was not generated for your account.") }
-                return
-            }
-            guard let status = data["status"] as? String, status == "pending" else {
-                await MainActor.run { scanState = .error("This transaction has already been confirmed or is no longer valid.") }
-                return
-            }
-
-            try await ref.updateData([
-                "status": "confirmed",
-                "confirmedAt": FieldValue.serverTimestamp()
-            ])
-            await MainActor.run { scanState = .confirmed }
-        } catch {
-            await MainActor.run { scanState = .error(error.localizedDescription) }
-        }
     }
 }
 

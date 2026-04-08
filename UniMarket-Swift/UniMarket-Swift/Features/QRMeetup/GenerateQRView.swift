@@ -2,36 +2,27 @@
 //  GenerateQRView.swift
 //  UniMarket-Swift
 //
-//  Created by Joseph Linares on 17/03/26.
-//
 
 import SwiftUI
 import CoreImage.CIFilterBuiltins
-import FirebaseFirestore
 
 struct GenerateQRView: View {
-    let listingId: String
-    let sellerId: String
-    let listingStatus: ProductStatus
-
+    @StateObject private var vm: GenerateQRViewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var buyerUID = ""
-    @State private var viewState: ViewState = .idle
 
-    enum ViewState {
-        case idle
-        case loading
-        case generated(transactionId: String)
-        case error(String)
+    init(listingId: String, sellerId: String, listingStatus: ProductStatus) {
+        _vm = StateObject(wrappedValue: GenerateQRViewModel(
+            listingId: listingId,
+            sellerId: sellerId,
+            listingStatus: listingStatus
+        ))
     }
-
-    private var isListingActive: Bool { listingStatus == .active }
 
     var body: some View {
         ZStack {
             AppTheme.background.ignoresSafeArea()
 
-            switch viewState {
+            switch vm.viewState {
             case .idle, .error:
                 inputView
             case .loading:
@@ -50,12 +41,11 @@ struct GenerateQRView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
 
-                // Status warning if listing is not active
-                if !isListingActive {
+                if !vm.isListingActive {
                     HStack(spacing: 10) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)
-                        Text("Only active listings can generate a QR. This listing is currently \(listingStatus.rawValue.lowercased()).")
+                        Text("Only active listings can generate a QR. This listing is currently \(vm.listingStatus.rawValue.lowercased()).")
                             .font(.poppinsRegular(13))
                             .foregroundStyle(AppTheme.primaryText)
                     }
@@ -70,13 +60,12 @@ struct GenerateQRView: View {
                     .font(.poppinsRegular(13))
                     .foregroundStyle(AppTheme.secondaryText)
 
-                // Buyer UID field
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Buyer User ID")
                         .font(.poppinsSemiBold(13))
                         .foregroundStyle(AppTheme.secondaryText)
 
-                    TextField("e.g. SzYQPjOGb5Vcz...", text: $buyerUID)
+                    TextField("e.g. SzYQPjOGb5Vcz...", text: $vm.buyerUID)
                         .font(.poppinsRegular(14))
                         .foregroundStyle(AppTheme.primaryText)
                         .padding(12)
@@ -97,8 +86,7 @@ struct GenerateQRView: View {
                         .foregroundStyle(AppTheme.secondaryText)
                 }
 
-                // Error message
-                if case .error(let message) = viewState {
+                if case .error(let message) = vm.viewState {
                     HStack(spacing: 8) {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.red)
@@ -108,9 +96,8 @@ struct GenerateQRView: View {
                     }
                 }
 
-                // Generate button
                 Button {
-                    Task { await generateQR() }
+                    Task { await vm.generateQR() }
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "qrcode")
@@ -120,10 +107,10 @@ struct GenerateQRView: View {
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(isListingActive ? AppTheme.accent : AppTheme.secondaryText)
+                    .background(vm.isListingActive ? AppTheme.accent : AppTheme.secondaryText)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
-                .disabled(!isListingActive)
+                .disabled(!vm.isListingActive)
             }
             .padding(20)
         }
@@ -199,7 +186,7 @@ struct GenerateQRView: View {
         }
     }
 
-    // MARK: - QR generation
+    // MARK: - QR image helper
 
     private func qrImage(for transactionId: String) -> Image {
         let context = CIContext()
@@ -214,49 +201,5 @@ struct GenerateQRView: View {
             )
         else { return Image(systemName: "xmark.circle") }
         return Image(uiImage: UIImage(cgImage: cgImage))
-    }
-
-    // MARK: - Firestore logic
-
-    private func generateQR() async {
-        let trimmedUID = buyerUID.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedUID.isEmpty else {
-            viewState = .error("Please enter the buyer's User ID.")
-            return
-        }
-        guard isListingActive else {
-            viewState = .error("This listing is not active and cannot generate a QR.")
-            return
-        }
-
-        await MainActor.run { viewState = .loading }
-
-        do {
-            let db = Firestore.firestore()
-
-            // Validate buyer exists in Firestore
-            let buyerDoc = try await db.collection("users").document(trimmedUID).getDocument()
-            guard buyerDoc.exists else {
-                await MainActor.run {
-                    viewState = .error("No user found with that ID. Please verify the buyer's UID.")
-                }
-                return
-            }
-
-            // Create pending meetup_transaction
-            let ref = db.collection("meetup_transactions").document()
-            try await ref.setData([
-                "listingId": listingId,
-                "sellerId": sellerId,
-                "buyerId": trimmedUID,
-                "status": "pending",
-                "createdAt": FieldValue.serverTimestamp(),
-                "confirmedAt": NSNull()
-            ])
-
-            await MainActor.run { viewState = .generated(transactionId: ref.documentID) }
-        } catch {
-            await MainActor.run { viewState = .error(error.localizedDescription) }
-        }
     }
 }
