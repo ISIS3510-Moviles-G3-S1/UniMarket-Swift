@@ -23,6 +23,23 @@ final class UploadProductViewModel: ObservableObject {
     @Published var isPosting: Bool = false
     @Published var errorMessage: String? = nil
 
+    func applyAIDraft(_ draft: AIListingDraft, image: UIImage?) {
+        if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            title = draft.title
+        }
+
+        if description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            description = draft.description
+        }
+
+        selectedTags = Array(draft.tags.map(normalizeTag).filter { !$0.isEmpty }).prefix(8).map { $0 }
+        errorMessage = nil
+
+        if let image, selectedImages.isEmpty, imagesData.isEmpty {
+            addImageFromCamera(image)
+        }
+    }
+
     func loadSelectedPhotos() async {
         errorMessage = nil
 
@@ -182,7 +199,11 @@ final class UploadProductViewModel: ObservableObject {
     private func normalizeTag(_ value: String) -> String {
         value
             .trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+            .first
+            .map(String.init)?
             .lowercased()
+            ?? ""
     }
 
     private func priceBucket(for price: Int) -> String {

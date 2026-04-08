@@ -63,6 +63,10 @@ final class ProductDetailViewModel: ObservableObject {
         sourceProduct
     }
 
+    func productForSaleState(isSold: Bool) -> Product? {
+        sourceProduct?.updatingSaleState(isSold: isSold)
+    }
+
     func applyProductUpdate(_ updated: Product) {
         sourceProduct = updated
         title = updated.title

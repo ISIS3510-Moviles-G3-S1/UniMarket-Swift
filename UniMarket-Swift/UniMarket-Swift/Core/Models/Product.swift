@@ -70,3 +70,16 @@ enum ProductStatus: String, CaseIterable, Identifiable, Codable {
 
     var id: String { rawValue }
 }
+
+extension Product {
+    var isSold: Bool {
+        status == .sold
+    }
+
+    func updatingSaleState(isSold: Bool) -> Product {
+        var updated = self
+        updated.status = isSold ? .sold : .active
+        updated.soldAt = isSold ? (soldAt ?? .now) : nil
+        return updated
+    }
+}
