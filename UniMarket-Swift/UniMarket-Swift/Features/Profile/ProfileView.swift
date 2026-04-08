@@ -43,6 +43,15 @@ struct ProfileView: View {
                     }
                     .padding(.horizontal)
 
+                    SellerPerformanceCard(
+                        soldCount: vm.soldCountForPeriod,
+                        feedbackMessage: vm.sellerFeedbackMessage,
+                        selectedPeriod: vm.selectedSalesPeriod
+                    ) { period in
+                        vm.selectedSalesPeriod = period
+                    }
+                    .padding(.horizontal)
+
                     Divider().padding(.horizontal)
 
                     EcoSaysCard(message: vm.ecoMessage, isLoading: vm.isGeneratingEcoMessage)

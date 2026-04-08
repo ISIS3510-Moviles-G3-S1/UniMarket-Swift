@@ -25,10 +25,16 @@ final class ProfileViewModel: ObservableObject {
         case month = "Last 30 Days"
         case allTime = "All Time"
     }
-    
+
+    enum SalesPeriod: String, CaseIterable {
+        case fifteenDays = "15 Days"
+        case thisMonth = "This Month"
+    }
+
     @Published var selectedTab: Tab = .activity
     @Published var currentUser: User?
     @Published var selectedTimeRange: TimeRange = .month
+    @Published var selectedSalesPeriod: SalesPeriod = .thisMonth
     
     @Published var displayName: String = "Loading..."
     @Published var memberSince: String = "..."
@@ -398,6 +404,34 @@ final class ProfileViewModel: ObservableObject {
         )
     }
     
+    var soldCountForPeriod: Int {
+        let calendar = Calendar.current
+        let now = Date()
+        let cutoff: Date
+        switch selectedSalesPeriod {
+        case .fifteenDays:
+            cutoff = calendar.date(byAdding: .day, value: -15, to: now) ?? now
+        case .thisMonth:
+            cutoff = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? now
+        }
+        return listings.filter { $0.soldAt.map { $0 >= cutoff } ?? false }.count
+    }
+
+    var sellerFeedbackMessage: String {
+        switch soldCountForPeriod {
+        case 0:
+            return "No items sold yet in this period. Try improving your photos or adjusting your price."
+        case 1...2:
+            return "Nice start! You've already sold some items this period."
+        case 3...5:
+            return "Good progress! Your listings are getting attention."
+        case 6...10:
+            return "Great job! You're selling consistently."
+        default:
+            return "Excellent work! Your closet is performing really well."
+        }
+    }
+
     func deleteListing(_ product: Product) {
         listings.removeAll { $0.id == product.id }
     }
