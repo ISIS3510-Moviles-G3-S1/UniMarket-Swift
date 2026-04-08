@@ -37,7 +37,7 @@ struct ClothingAnalysisView: View {
         .navigationDestination(isPresented: $navigateToUpload) {
             UploadProductView(
                 aiAnalysisImage: viewModel.selectedImage,
-                aiAnalysisTags: viewModel.editableTags.map { $0.name }
+                aiListingDraft: viewModel.analysisResult?.listingDraft
             )
         }
     }

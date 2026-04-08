@@ -16,6 +16,8 @@ struct ProductDetailView: View {
     @State private var editingProduct: Product?
     @State private var chatConversationID: String?
     @State private var isStartingChat = false
+    @State private var isUpdatingSaleState = false
+    @State private var saleStateErrorMessage: String?
     @State private var showGenerateQR = false
     @State private var showScanQR = false
 
@@ -88,6 +90,12 @@ struct ProductDetailView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
+                    if vm.isOwnListing {
+                        saleStateSection
+                    } else if vm.status == .sold {
+                        soldNotice
+                    }
+
                     if !vm.tags.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
                             Text("Tags")
@@ -158,6 +166,13 @@ struct ProductDetailView: View {
         .sheet(isPresented: $showScanQR) {
             ScanQRView()
         }
+        .alert("Couldn't Update Listing", isPresented: saleStateErrorBinding) {
+            Button("OK", role: .cancel) {
+                saleStateErrorMessage = nil
+            }
+        } message: {
+            Text(saleStateErrorMessage ?? "Unknown error")
+        }
     }
 
     // MARK: - Image header
@@ -222,6 +237,8 @@ struct ProductDetailView: View {
                     .background(AppTheme.accent)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
+                .disabled(vm.status == .sold || isUpdatingSaleState)
+                .opacity(vm.status == .sold || isUpdatingSaleState ? 0.55 : 1)
             }
         } else {
             VStack(spacing: 10) {
@@ -252,6 +269,8 @@ struct ProductDetailView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .disabled(vm.status != .active)
+                .opacity(vm.status == .active ? 1 : 0.55)
 
                 // MARK: Message button
                 Button {
@@ -293,6 +312,8 @@ struct ProductDetailView: View {
                     .background(AppTheme.accent)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
+                .disabled(vm.status != .active || isStartingChat)
+                .opacity(vm.status == .active ? 1 : 0.55)
             }
 
             // MARK: Scan QR button (buyer)
@@ -310,8 +331,59 @@ struct ProductDetailView: View {
                 .background(AppTheme.accent)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
+            .disabled(vm.status != .active)
+            .opacity(vm.status == .active ? 1 : 0.55)
             } // end VStack (buyer)
         }
+    }
+
+    private var saleStateSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Listing Status")
+                .font(.poppinsSemiBold(16))
+                .foregroundStyle(AppTheme.primaryText)
+
+            Toggle(isOn: soldToggleBinding) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Mark as sold")
+                        .font(.poppinsSemiBold(15))
+                        .foregroundStyle(AppTheme.primaryText)
+
+                    Text(vm.status == .sold ? "This listing is hidden from buyers across the app." : "Turn this on when the item is no longer available.")
+                        .font(.poppinsRegular(13))
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+            }
+            .tint(AppTheme.accent)
+            .disabled(isUpdatingSaleState)
+
+            if isUpdatingSaleState {
+                ProgressView()
+                    .tint(AppTheme.accent)
+            }
+        }
+        .padding(14)
+        .background(AppTheme.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+        )
+    }
+
+    private var soldNotice: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.white)
+
+            Text("This item has already been sold.")
+                .font(.poppinsSemiBold(14))
+                .foregroundStyle(.white)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.gray.opacity(0.7))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     // MARK: - Chat sheet routing
@@ -330,5 +402,44 @@ struct ProductDetailView: View {
                 chatConversationID = newValue?.id
             }
         )
+    }
+
+    private var soldToggleBinding: Binding<Bool> {
+        Binding(
+            get: { vm.status == .sold },
+            set: { isSold in
+                Task {
+                    await updateSaleState(isSold: isSold)
+                }
+            }
+        )
+    }
+
+    private var saleStateErrorBinding: Binding<Bool> {
+        Binding(
+            get: { saleStateErrorMessage != nil },
+            set: { isPresented in
+                if !isPresented {
+                    saleStateErrorMessage = nil
+                }
+            }
+        )
+    }
+
+    @MainActor
+    private func updateSaleState(isSold: Bool) async {
+        guard vm.isOwnListing, !isUpdatingSaleState else { return }
+        guard let updatedProduct = vm.productForSaleState(isSold: isSold) else { return }
+
+        isUpdatingSaleState = true
+        defer { isUpdatingSaleState = false }
+
+        do {
+            try await productStore.updateProduct(updatedProduct)
+            vm.applyProductUpdate(updatedProduct)
+            onProductUpdated?(updatedProduct)
+        } catch {
+            saleStateErrorMessage = error.localizedDescription
+        }
     }
 }

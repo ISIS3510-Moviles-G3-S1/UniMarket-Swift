@@ -52,7 +52,7 @@ struct EditListingView: View {
                         updated.title = cleanTitle.isEmpty ? product.title : cleanTitle
                         updated.price = price
                         updated.status = status
-                        updated.soldAt = status == .sold ? product.soldAt : nil
+                        updated.soldAt = status == .sold ? (product.soldAt ?? .now) : nil
 
                         onSave(updated)
                         dismiss()
