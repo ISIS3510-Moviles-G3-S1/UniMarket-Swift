@@ -10,7 +10,8 @@ struct ChatThreadView: View {
 
     @State private var draftMessage: String = ""
     @State private var isSending = false
-    @State private var selectedPhotoItem: PhotosPickerItem? = nil
+    @State private var selectedPhotoItems: [PhotosPickerItem] = []
+    @State private var showCamera = false
     @State private var errorMessage: String? = nil
     @State private var replyingTo: ChatMessage.ReplySnapshot? = nil
 
@@ -93,9 +94,16 @@ struct ChatThreadView: View {
             chatStore.stopObservingMessages(for: conversationID)
             withAnimation { hideTabBar.wrappedValue = false }
         }
-        .onChange(of: selectedPhotoItem) {
-            guard let item = selectedPhotoItem else { return }
-            Task { await sendImage(from: item) }
+        .onChange(of: selectedPhotoItems) {
+            guard !selectedPhotoItems.isEmpty else { return }
+            let items = selectedPhotoItems
+            selectedPhotoItems = []
+            Task { await sendImages(from: items) }
+        }
+        .sheet(isPresented: $showCamera) {
+            ImagePicker(source: .camera) { image in
+                Task { await sendCameraImage(image) }
+            }
         }
     }
 
@@ -170,8 +178,16 @@ struct ChatThreadView: View {
 
     private var inputBar: some View {
         HStack(spacing: 10) {
-            PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+            PhotosPicker(selection: $selectedPhotoItems, maxSelectionCount: 5, matching: .images) {
                 Image(systemName: "photo")
+                    .font(.system(size: 20))
+                    .foregroundStyle(AppTheme.secondaryText)
+            }
+
+            Button {
+                showCamera = true
+            } label: {
+                Image(systemName: "camera")
                     .font(.system(size: 20))
                     .foregroundStyle(AppTheme.secondaryText)
             }
@@ -228,20 +244,36 @@ struct ChatThreadView: View {
         isSending = false
     }
 
-    private func sendImage(from item: PhotosPickerItem) async {
-        guard let data = try? await item.loadTransferable(type: Data.self),
-              let image = UIImage(data: data) else { return }
+    private func sendImages(from items: [PhotosPickerItem]) async {
+        isSending = true
+        errorMessage = nil
 
+        var images: [UIImage] = []
+        for item in items {
+            if let data = try? await item.loadTransferable(type: Data.self),
+               let image = UIImage(data: data) {
+                images.append(image)
+            }
+        }
+        guard !images.isEmpty else { isSending = false; return }
+
+        do {
+            try await chatStore.sendImageMessage(images: images, in: conversationID)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isSending = false
+    }
+
+    private func sendCameraImage(_ image: UIImage) async {
         isSending = true
         errorMessage = nil
 
         do {
-            try await chatStore.sendImageMessage(image: image, in: conversationID)
+            try await chatStore.sendImageMessage(images: [image], in: conversationID)
         } catch {
             errorMessage = error.localizedDescription
         }
-
-        selectedPhotoItem = nil
         isSending = false
     }
 }

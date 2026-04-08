@@ -342,23 +342,38 @@ final class ChatStore: ObservableObject {
     // MARK: - Send an image message
 
     func sendImageMessage(
-        image: UIImage,
+        images: [UIImage],
         in conversationID: String
     ) async throws {
         guard let uid = Auth.auth().currentUser?.uid else { throw ChatError.notAuthenticated }
+        guard !images.isEmpty else { return }
 
         // reserve message doc ID first so we can use it in the storage path
         let msgRef = db.collection("conversations").document(conversationID)
             .collection("messages").document()
 
-        let imageURL = try await ImageUploadService.uploadMessageImage(image, messageId: msgRef.documentID)
+        // upload all images concurrently
+        var uploadedURLs: [String] = []
+        try await withThrowingTaskGroup(of: (Int, String).self) { group in
+            for (index, image) in images.enumerated() {
+                group.addTask {
+                    let url = try await ImageUploadService.uploadMessageImage(image, messageId: msgRef.documentID, index: index)
+                    return (index, url)
+                }
+            }
+            var results: [(Int, String)] = []
+            for try await result in group {
+                results.append(result)
+            }
+            uploadedURLs = results.sorted(by: { $0.0 < $1.0 }).map(\.1)
+        }
 
         // Optimistic local update — image message appears immediately after upload.
         let optimistic = ChatMessage(
             id: msgRef.documentID,
             senderId: uid,
             text: "",
-            imageURLs: [imageURL],
+            imageURLs: uploadedURLs,
             type: .image,
             sentAt: Date(),
             readAt: nil,
@@ -372,15 +387,16 @@ final class ChatStore: ObservableObject {
         let msgData: [String: Any] = [
             "senderId": uid,
             "text": "",
-            "imageURLs": [imageURL],
+            "imageURLs": uploadedURLs,
             "type": "image",
             "sentAt": FieldValue.serverTimestamp(),
             "readAt": NSNull()
         ]
 
         try await msgRef.setData(msgData)
+        let label = images.count == 1 ? "📷 Image" : "📷 \(images.count) Images"
         try await db.collection("conversations").document(conversationID).updateData([
-            "lastMessageText": "📷 Image",
+            "lastMessageText": label,
             "lastMessageAt": FieldValue.serverTimestamp()
         ])
     }
