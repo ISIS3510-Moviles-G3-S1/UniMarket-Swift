@@ -12,6 +12,7 @@ struct AnalysisResult: Codable {
     let colors: [String]
     let style: String?
     let pattern: String?
+    let season: String?
     let confidence: Double
     let processingTimeMs: Int
     let allTags: [ClothingTag]
@@ -22,6 +23,7 @@ struct AnalysisResult: Codable {
         colors: [String],
         style: String?,
         pattern: String?,
+        season: String?,
         confidence: Double,
         processingTimeMs: Int,
         allTags: [ClothingTag],
@@ -31,6 +33,7 @@ struct AnalysisResult: Codable {
         self.colors = colors
         self.style = style
         self.pattern = pattern
+        self.season = season
         self.confidence = min(max(confidence, 0.0), 1.0)
         self.processingTimeMs = processingTimeMs
         self.allTags = allTags
@@ -46,9 +49,10 @@ struct AnalysisResult: Codable {
         let normalizedCategory = sanitizedWord(from: category) ?? "Clothing"
         let normalizedStyle = sanitizedWord(from: style)
         let normalizedPattern = sanitizedWord(from: pattern)
+        let normalizedSeason = sanitizedWord(from: season)
 
         var tags: [String] = []
-        for candidate in [normalizedCategory, primaryColor, normalizedStyle, normalizedPattern] {
+        for candidate in [normalizedCategory, primaryColor, normalizedStyle, normalizedPattern, normalizedSeason] {
             guard let candidate else { continue }
             appendTag(candidate, to: &tags)
         }
@@ -63,8 +67,10 @@ struct AnalysisResult: Codable {
         let title = titleWords.isEmpty ? "Clothing Item" : titleWords.joined(separator: " ")
 
         let description: String
-        if let normalizedStyle, let primaryColor, let normalizedPattern, normalizedPattern.lowercased() != "solid" {
-            description = "AI detected a \(primaryColor.lowercased()) \(normalizedStyle.lowercased()) \(normalizedCategory.lowercased()) with a \(normalizedPattern.lowercased()) pattern."
+        if let normalizedStyle, let primaryColor, let normalizedPattern, normalizedPattern.lowercased() != "solid", let normalizedSeason {
+            description = "AI detected a \(primaryColor.lowercased()) \(normalizedStyle.lowercased()) \(normalizedCategory.lowercased()) with a \(normalizedPattern.lowercased()) pattern that works well for \(normalizedSeason.lowercased())."
+        } else if let normalizedStyle, let primaryColor, let normalizedSeason {
+            description = "AI detected a \(primaryColor.lowercased()) \(normalizedStyle.lowercased()) \(normalizedCategory.lowercased()) for \(normalizedSeason.lowercased()) wear."
         } else if let normalizedStyle, let primaryColor {
             description = "AI detected a \(primaryColor.lowercased()) \(normalizedStyle.lowercased()) \(normalizedCategory.lowercased()) for everyday wear."
         } else if let primaryColor {
@@ -94,6 +100,10 @@ struct AnalysisResult: Codable {
         
         if let pattern = pattern {
             summary += "Pattern: \(pattern)\n"
+        }
+
+        if let season = season {
+            summary += "Season: \(season)\n"
         }
         
         summary += "Confidence: \(confidencePercentage)%"

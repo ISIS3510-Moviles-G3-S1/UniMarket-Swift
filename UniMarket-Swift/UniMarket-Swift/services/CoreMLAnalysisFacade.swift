@@ -66,6 +66,7 @@ class CoreMLAnalysisFacade: NSObject {
         // Infer style and pattern
         let style = categoryMapper.inferStyle(from: category, colors: colors)
         let pattern = categoryMapper.inferPattern(from: visionResults.first?.identifier ?? "")
+        let season = categoryMapper.inferSeason(from: category, colors: colors)
         
         // Calculate processing time
         let processingTimeMs = Int(Date().timeIntervalSince(startTime) * 1000)
@@ -79,6 +80,7 @@ class CoreMLAnalysisFacade: NSObject {
             colors: colors.isEmpty ? ["Unknown"] : colors,
             style: style,
             pattern: pattern,
+            season: season,
             confidence: maxConfidence,
             processingTimeMs: processingTimeMs,
             allTags: tags,
@@ -213,6 +215,15 @@ class CoreMLAnalysisFacade: NSObject {
             )
             tags.append(colorTag)
         }
+
+        let season = categoryMapper.inferSeason(from: primaryCategory, colors: colors)
+        tags.append(
+            ClothingTag(
+                name: season,
+                confidence: 0.72,
+                category: .season
+            )
+        )
         
         return (primaryCategory, tags, maxConfidence)
     }

@@ -129,4 +129,22 @@ class ClothingCategoryMapper {
         // Default to solid if no pattern detected
         return "Solid"
     }
+
+    /// Infers the season a clothing item is best suited for based on category and colors.
+    func inferSeason(from category: String, colors: [String]) -> String {
+        switch category {
+        case "Jacket", "Suit":
+            return "Fall/Winter"
+        case "Pants":
+            return "All-Season"
+        case "Dress":
+            return colors.contains("Black") || colors.contains("Navy") ? "Fall" : "Spring/Summer"
+        case "Shoes", "Accessory":
+            return "All-Season"
+        case "Shirt":
+            return colors.contains("Black") || colors.contains("Gray") ? "Fall" : "Spring/Summer"
+        default:
+            return "All-Season"
+        }
+    }
 }

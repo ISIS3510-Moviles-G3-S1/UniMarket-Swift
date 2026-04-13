@@ -21,6 +21,8 @@ struct TagChipView: View {
             return Color.blue.opacity(0.2)
         case .pattern:
             return Color.purple.opacity(0.2)
+        case .season:
+            return Color.orange.opacity(0.2)
         }
     }
     
@@ -34,6 +36,8 @@ struct TagChipView: View {
             return Color.blue
         case .pattern:
             return Color.purple
+        case .season:
+            return Color.orange
         }
     }
     
@@ -84,6 +88,10 @@ struct TagChipView: View {
         TagChipView(
             tag: ClothingTag(name: "Casual", confidence: 0.92, category: .style),
             onRemove: { _ in }
+        )
+
+        TagChipView(
+            tag: ClothingTag(name: "Fall/Winter", confidence: 0.72, category: .season)
         )
     }
     .padding()

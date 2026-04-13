@@ -66,6 +66,78 @@ final class OpenRouterService {
         print("DEBUG[OpenRouter] Success contentChars=\(trimmed.count)")
         return trimmed
     }
+
+    func generateStylistReply(prompt: String, catalog: [Product]) async throws -> String {
+        guard APIConfig.isOpenRouterConfigured() else {
+            throw OpenRouterError.missingAPIKey
+        }
+
+        guard let url = URL(string: APIConfig.openRouterBaseURL) else {
+            throw OpenRouterError.invalidURL
+        }
+
+        let catalogSummary = catalog.prefix(8).enumerated().map { index, product in
+            let tags = product.tags.prefix(3).joined(separator: ", ")
+            return "\(index + 1). \(product.title) - $\(product.price). Tags: \(tags). Condition: \(product.conditionTag)."
+        }.joined(separator: "\n")
+
+        var request = URLRequest(url: url, timeoutInterval: APIConfig.requestTimeout)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(APIConfig.openRouterAPIKey)", forHTTPHeaderField: "Authorization")
+
+        if !APIConfig.openRouterReferer.isEmpty {
+            request.setValue(APIConfig.openRouterReferer, forHTTPHeaderField: "HTTP-Referer")
+        }
+        if !APIConfig.openRouterTitle.isEmpty {
+            request.setValue(APIConfig.openRouterTitle, forHTTPHeaderField: "X-OpenRouter-Title")
+        }
+
+        let body = ORChatRequest(
+            model: APIConfig.openRouterModel,
+            messages: [
+                ORChatMessage(
+                    role: "system",
+                    content: """
+                    You are UniMarket's AI Stylist. Build simple, practical outfit suggestions for a student marketplace app focused on clothing.
+                    Keep the tone friendly and concise.
+                    When possible, use only items from the provided catalog.
+                    Give one complete outfit, mention 2-4 specific pieces, and end with one short styling note.
+                    Keep the response under 120 words.
+                    """
+                ),
+                ORChatMessage(
+                    role: "user",
+                    content: """
+                    User request: \(prompt)
+
+                    Available catalog items:
+                    \(catalogSummary)
+                    """
+                )
+            ]
+        )
+
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw OpenRouterError.invalidResponse
+        }
+
+        guard (200...299).contains(http.statusCode) else {
+            let apiError = try? JSONDecoder().decode(ORErrorResponse.self, from: data)
+            throw OpenRouterError.server(statusCode: http.statusCode, message: apiError?.error.message)
+        }
+
+        let decoded = try JSONDecoder().decode(ORChatResponse.self, from: data)
+        guard let content = decoded.choices.first?.message.content,
+              !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw OpenRouterError.emptyContent
+        }
+
+        return content.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 }
 
 private struct ORChatRequest: Encodable {
