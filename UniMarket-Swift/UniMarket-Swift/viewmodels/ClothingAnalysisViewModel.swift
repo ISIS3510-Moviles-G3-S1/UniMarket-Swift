@@ -170,4 +170,8 @@ extension ClothingAnalysisViewModel {
     var patternTags: [ClothingTag] {
         editableTags.filter { $0.category == .pattern }
     }
+
+    var seasonTags: [ClothingTag] {
+        editableTags.filter { $0.category == .season }
+    }
 }

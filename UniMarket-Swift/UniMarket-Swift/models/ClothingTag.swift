@@ -18,6 +18,7 @@ struct ClothingTag: Identifiable, Codable, Hashable {
         case color
         case style
         case pattern
+        case season
         
         var displayName: String {
             switch self {
@@ -29,6 +30,8 @@ struct ClothingTag: Identifiable, Codable, Hashable {
                 "Style"
             case .pattern:
                 "Pattern"
+            case .season:
+                "Season"
             }
         }
     }

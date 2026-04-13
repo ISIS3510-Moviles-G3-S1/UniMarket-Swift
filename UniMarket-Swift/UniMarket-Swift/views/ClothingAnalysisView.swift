@@ -273,6 +273,32 @@ struct ClothingAnalysisView: View {
                             .stroke(Color.purple.opacity(0.2), lineWidth: 1)
                     )
                 }
+
+                if !viewModel.seasonTags.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Season")
+                            .font(.poppinsSemiBold(14))
+                            .foregroundColor(AppTheme.secondaryText)
+                            .textCase(.uppercase)
+
+                        VStack(spacing: 8) {
+                            ForEach(viewModel.seasonTags) { tag in
+                                TagChipView(
+                                    tag: tag,
+                                    onRemove: viewModel.removeTag(withId:)
+                                )
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(AppTheme.cardBackground)
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.orange.opacity(0.2), lineWidth: 1)
+                    )
+                }
                 
                 // Information box
                 VStack(alignment: .leading, spacing: 8) {

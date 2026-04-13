@@ -10,6 +10,7 @@ import SwiftUI
 struct HomeView: View {
     @EnvironmentObject private var chatStore: ChatStore
     @EnvironmentObject private var productStore: ProductStore
+    @StateObject private var viewModel = HomeViewModel()
 
     let onBrowseItems: () -> Void
     let onStartSelling: () -> Void
@@ -27,6 +28,8 @@ struct HomeView: View {
                         onBrowseItems: onBrowseItems,
                         onStartSelling: onStartSelling
                     )
+
+                    seasonSection
 
                     FeaturedProductCard(product: productStore.activeProducts.first)
                 }
@@ -55,5 +58,21 @@ struct HomeView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var seasonSection: some View {
+#if DEBUG
+        SeasonForYouSection(
+            season: viewModel.currentSeason(),
+            products: viewModel.productsForCurrentSeason(from: productStore.activeProducts),
+            debugSelection: $viewModel.debugSeasonSelection
+        )
+#else
+        SeasonForYouSection(
+            season: viewModel.currentSeason(),
+            products: viewModel.productsForCurrentSeason(from: productStore.activeProducts)
+        )
+#endif
     }
 }
