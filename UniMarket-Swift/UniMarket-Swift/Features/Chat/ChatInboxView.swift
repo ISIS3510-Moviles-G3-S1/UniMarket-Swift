@@ -10,8 +10,6 @@ struct ChatInboxView: View {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(AppTheme.background)
-            } else if chatStore.conversations.isEmpty {
-                emptyState
             } else {
                 inboxList
             }
@@ -26,6 +24,46 @@ struct ChatInboxView: View {
 
     private var inboxList: some View {
         List {
+            Section {
+                NavigationLink {
+                    AIStylistChatView()
+                } label: {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(AppTheme.accent.opacity(0.18))
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(AppTheme.accent)
+                        }
+                        .frame(width: 44, height: 44)
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("AI Stylist")
+                                .font(.poppinsSemiBold(14))
+                                .foregroundStyle(AppTheme.primaryText)
+                            Text("Ask for a full outfit from items in the app.")
+                                .font(.poppinsRegular(12))
+                                .foregroundStyle(AppTheme.secondaryText)
+                                .lineLimit(2)
+                        }
+
+                        Spacer()
+                    }
+                    .padding(.vertical, 6)
+                }
+                .listRowBackground(AppTheme.background)
+            }
+
+            if chatStore.conversations.isEmpty {
+                Section {
+                    emptyState
+                        .frame(maxWidth: .infinity)
+                        .listRowInsets(EdgeInsets(top: 24, leading: 16, bottom: 24, trailing: 16))
+                        .listRowBackground(AppTheme.background)
+                }
+            }
+
             ForEach(chatStore.conversations) { conversation in
                 NavigationLink {
                     ChatThreadView(conversationID: conversation.id)
