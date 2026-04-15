@@ -1,5 +1,8 @@
 import Combine
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct AIStylistMessage: Identifiable {
     enum Role {
@@ -11,6 +14,7 @@ struct AIStylistMessage: Identifiable {
     let role: Role
     let text: String
     let suggestedProducts: [Product]
+    let attachedImage: UIImage?
 }
 
 @MainActor
@@ -19,7 +23,8 @@ final class AIStylistChatViewModel: ObservableObject {
         AIStylistMessage(
             role: .assistant,
             text: "Ask for a full outfit, a vibe, or a budget. Example: \"Give me a casual campus outfit under $60.\"",
-            suggestedProducts: []
+            suggestedProducts: [],
+            attachedImage: nil
         )
     ]
     @Published var isSending = false
@@ -31,15 +36,24 @@ final class AIStylistChatViewModel: ObservableObject {
         self.creator = creator ?? StylistChatbotFactory.makeCreator()
     }
 
-    func send(prompt: String, catalog: [Product]) async {
+    func send(prompt: String, catalog: [Product], referenceImage: UIImage?) async {
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty || referenceImage != nil else { return }
 
-        messages.append(AIStylistMessage(role: .user, text: trimmed, suggestedProducts: []))
+        let userMessage = trimmed.isEmpty ? "Help me build an outfit that complements this photo." : trimmed
+
+        messages.append(
+            AIStylistMessage(
+                role: .user,
+                text: userMessage,
+                suggestedProducts: [],
+                attachedImage: referenceImage
+            )
+        )
         isSending = true
         errorMessage = nil
 
-        let request = StylistChatRequest(prompt: trimmed, catalog: catalog)
+        let request = StylistChatRequest(prompt: userMessage, catalog: catalog, referenceImage: referenceImage)
 
         do {
             let response = try await creator.makeChatbot().respond(to: request)
@@ -47,7 +61,8 @@ final class AIStylistChatViewModel: ObservableObject {
                 AIStylistMessage(
                     role: .assistant,
                     text: response.message,
-                    suggestedProducts: response.suggestedProducts
+                    suggestedProducts: response.suggestedProducts,
+                    attachedImage: nil
                 )
             )
         } catch {
@@ -57,7 +72,8 @@ final class AIStylistChatViewModel: ObservableObject {
                     AIStylistMessage(
                         role: .assistant,
                         text: response.message,
-                        suggestedProducts: response.suggestedProducts
+                        suggestedProducts: response.suggestedProducts,
+                        attachedImage: nil
                     )
                 )
             }
@@ -73,11 +89,14 @@ struct AIStylistChatView: View {
     @Environment(\.hideTabBar) private var hideTabBar
     @StateObject private var viewModel = AIStylistChatViewModel()
     @State private var draftMessage = ""
+    @State private var selectedReferenceImage: UIImage?
+    @State private var showPhotoLibrary = false
 
     private let promptSuggestions = [
         "Give me a casual campus outfit",
         "Build a streetwear outfit under $80",
-        "I need a neutral outfit for class"
+        "I need a neutral outfit for class",
+        "Build an outfit around this piece"
     ]
 
     var body: some View {
@@ -136,6 +155,11 @@ struct AIStylistChatView: View {
                 hideTabBar.wrappedValue = false
             }
         }
+        .sheet(isPresented: $showPhotoLibrary) {
+            ImagePicker(source: .photoLibrary) { image in
+                selectedReferenceImage = image
+            }
+        }
     }
 
     private var promptStrip: some View {
@@ -163,13 +187,23 @@ struct AIStylistChatView: View {
                     Spacer(minLength: 40)
                 }
 
-                Text(message.text)
-                    .font(.poppinsRegular(14))
-                    .foregroundStyle(message.role == .user ? .white : AppTheme.primaryText)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(message.role == .user ? AppTheme.accent : AppTheme.cardBackground)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                VStack(alignment: .leading, spacing: 8) {
+                    if let attachedImage = message.attachedImage {
+                        Image(uiImage: attachedImage)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 150, height: 150)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+
+                    Text(message.text)
+                        .font(.poppinsRegular(14))
+                        .foregroundStyle(message.role == .user ? .white : AppTheme.primaryText)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(message.role == .user ? AppTheme.accent : AppTheme.cardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
                 if message.role == .assistant {
                     Spacer(minLength: 40)
@@ -222,37 +256,85 @@ struct AIStylistChatView: View {
     }
 
     private var inputBar: some View {
-        HStack(spacing: 10) {
-            TextField("Ask for an outfit...", text: $draftMessage)
-                .font(.poppinsRegular(14))
+        VStack(spacing: 10) {
+            if let selectedReferenceImage {
+                HStack(spacing: 12) {
+                    Image(uiImage: selectedReferenceImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 52, height: 52)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                    Text("Photo ready for outfit matching")
+                        .font(.poppinsRegular(13))
+                        .foregroundStyle(AppTheme.secondaryText)
+
+                    Spacer()
+
+                    Button {
+                        self.selectedReferenceImage = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(AppTheme.secondaryText)
+                    }
+                }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
                 .background(AppTheme.cardBackground)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-            Button {
-                let prompt = draftMessage
-                draftMessage = ""
-                Task {
-                    await viewModel.send(prompt: prompt, catalog: productStore.activeProducts)
-                }
-            } label: {
-                if viewModel.isSending {
-                    ProgressView()
-                        .tint(.white)
-                        .frame(width: 44, height: 38)
-                        .background(AppTheme.accent)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                } else {
-                    Image(systemName: "paperplane.fill")
-                        .font(.system(size: 16))
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 38)
-                        .background(AppTheme.accent)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                }
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
-            .disabled(viewModel.isSending || draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+            HStack(spacing: 10) {
+                Button {
+                    showPhotoLibrary = true
+                } label: {
+                    Image(systemName: "photo")
+                        .font(.system(size: 18))
+                        .foregroundStyle(AppTheme.secondaryText)
+                        .frame(width: 40, height: 40)
+                        .background(AppTheme.cardBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+
+                TextField("Ask for an outfit...", text: $draftMessage)
+                    .font(.poppinsRegular(14))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(AppTheme.cardBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                Button {
+                    let prompt = draftMessage
+                    let referenceImage = selectedReferenceImage
+                    draftMessage = ""
+                    selectedReferenceImage = nil
+                    Task {
+                        await viewModel.send(prompt: prompt, catalog: productStore.activeProducts, referenceImage: referenceImage)
+                    }
+                } label: {
+                    if viewModel.isSending {
+                        ProgressView()
+                            .tint(.white)
+                            .frame(width: 44, height: 38)
+                            .background(AppTheme.accent)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    } else {
+                        Image(systemName: "paperplane.fill")
+                            .font(.system(size: 16))
+                            .foregroundStyle(.white)
+                            .frame(width: 44, height: 38)
+                            .background(AppTheme.accent)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                }
+                .disabled(
+                    viewModel.isSending ||
+                    (
+                        draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                        selectedReferenceImage == nil
+                    )
+                )
+            }
         }
         .padding(.horizontal)
         .padding(.vertical, 12)
