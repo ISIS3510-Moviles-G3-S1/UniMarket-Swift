@@ -94,10 +94,6 @@ class CoreMLAnalysisFacade: NSObject {
     
     /// Loads the Core ML model
     private func loadMLModel() throws -> MLModel {
-        #if DEBUG
-        print("Attempting to load Core ML model from bundle...")
-        #endif
-
         guard let modelURL = Bundle.main.url(forResource: "MobileNetV2", withExtension: "mlmodelc") else {
             throw AnalysisError.modelLoadFailed
         }
@@ -229,10 +225,5 @@ class CoreMLAnalysisFacade: NSObject {
     }
     
     /// Logs analytics about the analysis
-    private func logAnalytics(processingTimeMs: Int, tagsDetected: Int) {
-        #if DEBUG
-        print("Image analysis completed in \(processingTimeMs)ms")
-        print("Tags detected: \(tagsDetected)")
-        #endif
-    }
+    private func logAnalytics(processingTimeMs: Int, tagsDetected: Int) { }
 }

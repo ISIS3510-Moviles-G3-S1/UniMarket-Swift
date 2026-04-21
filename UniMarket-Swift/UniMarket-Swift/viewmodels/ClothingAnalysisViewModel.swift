@@ -135,12 +135,9 @@ class ClothingAnalysisViewModel: NSObject, ObservableObject {
 
     /// Logs when user confirms and proceeds with the listing
     func logListingCreationStart() {
-        let event: [String: Any] = [
-            "event": "listing_creation_with_ai_tags",
-            "tags_count": editableTags.count,
-            "processing_time_ms": processingTimeMs
-        ]
-        print("Analytics Event: \(event)")
+        AnalyticsService.shared.track(
+            .aiTaggingCompleted(durationMs: processingTimeMs, tagCount: editableTags.count)
+        )
     }
 }
 

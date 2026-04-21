@@ -82,7 +82,6 @@ final class ChatStore: ObservableObject {
             .whereField("participants", arrayContains: uid)
             .addSnapshotListener { [weak self] snapshot, error in
                 guard let snapshot else {
-                    print("DEBUG ChatStore: conversation listener error \(error?.localizedDescription ?? "")")
                     Task { @MainActor in self?.isLoading = false }
                     return
                 }
@@ -129,10 +128,7 @@ final class ChatStore: ObservableObject {
             .collection("messages")
             .order(by: "sentAt")
             .addSnapshotListener { [weak self] snapshot, error in
-                guard let snapshot else {
-                    print("DEBUG ChatStore: unread count listener error \(error?.localizedDescription ?? "")")
-                    return
-                }
+                guard let snapshot else { return }
 
                 Task { @MainActor [weak self] in
                     guard let self else { return }
@@ -448,9 +444,7 @@ final class ChatStore: ObservableObject {
         Task {
             do {
                 try await batch.commit()
-            } catch {
-                print("DEBUG ChatStore: failed to mark messages as read \(error.localizedDescription)")
-            }
+            } catch { }
         }
 
         // optimistic local update

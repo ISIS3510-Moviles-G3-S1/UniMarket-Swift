@@ -7,7 +7,6 @@
 
 import SwiftUI
 import Combine
-import FirebaseAuth
 
 final class ProfileViewModel: ObservableObject {
     struct MonthlyProductStats {
@@ -92,7 +91,6 @@ final class ProfileViewModel: ObservableObject {
     }
     
     private func onListingEvent() {
-        print("DEBUG[ProfileVM] Listing event detected - will refresh eco message")
         Task {
             await fetchMyListings()
             await refreshPersonalizedEcoMessage(reason: "listing_event")
@@ -100,7 +98,7 @@ final class ProfileViewModel: ObservableObject {
     }
     
     func setupSubscribers() {
-        AuthService.shared.$currentUser
+        SessionManager.shared.$currentUser
             .receive(on: DispatchQueue.main)
             .sink { [weak self] user in
                 guard let self else { return }
@@ -116,8 +114,8 @@ final class ProfileViewModel: ObservableObject {
     
     @MainActor
     func onProfileTabSelected() async {
-        await AuthService.shared.fetchUser()
-        guard let user = AuthService.shared.currentUser else { return }
+        await SessionManager.shared.fetchUser()
+        guard let user = SessionManager.shared.currentUser else { return }
         
         let levelInfo = calculateLevelInfo(xp: user.xpPoints)
         var didChange = false
@@ -160,7 +158,7 @@ final class ProfileViewModel: ObservableObject {
     }
     
     func fetchMyListings() async {
-        guard let uid = Auth.auth().currentUser?.uid else {
+        guard let uid = SessionManager.shared.currentUser?.id else {
             await MainActor.run { listings = [] }
             return
         }
@@ -290,29 +288,18 @@ final class ProfileViewModel: ObservableObject {
 
     @MainActor
     private func refreshPersonalizedEcoMessage(reason: String) async {
-        print("DEBUG[ProfileVM] refreshPersonalizedEcoMessage called reason=\(reason)")
-
-        guard APIConfig.isOpenRouterConfigured() else {
-            print("DEBUG[ProfileVM] OpenRouter not configured. Skipping personalization.")
-            return
-        }
-        guard !isGeneratingEcoMessage else {
-            print("DEBUG[ProfileVM] Personalization already in progress. Skipping duplicate call.")
-            return
-        }
+        guard APIConfig.isOpenRouterConfigured() else { return }
+        guard !isGeneratingEcoMessage else { return }
 
         let levelInfo = calculateLevelInfo(xp: xp)
         let listingsCount = listings.count
         let soldCount = listings.filter { $0.soldAt != nil }.count
-        
-        // Check if counts have changed since last generation
+
         let defaults = UserDefaults.standard
         let lastListingsCount = defaults.integer(forKey: CacheKey.ecoMessageListingsCount)
         let lastSoldCount = defaults.integer(forKey: CacheKey.ecoMessageSoldCount)
-        
-        // Skip if coming from app_launch and counts haven't changed
+
         if reason == "app_launch" && listingsCount == lastListingsCount && soldCount == lastSoldCount {
-            print("DEBUG[ProfileVM] Counts unchanged since last generation (listings=\(listingsCount), sold=\(soldCount)). Using cached message.")
             return
         }
 
@@ -331,22 +318,13 @@ final class ProfileViewModel: ObservableObject {
         Total transactions: \(transactions)
         """
 
-        print("DEBUG[ProfileVM] Sending personalization request reason=\(reason) listings=\(listingsCount) sold=\(soldCount) xp=\(xp)")
-
         do {
             let response = try await OpenRouterService.shared.generateEcoRecommendation(prompt: prompt)
             ecoMessage = response
-            
-            // Cache the message and current counts
             defaults.set(response, forKey: CacheKey.ecoMessageText)
             defaults.set(listingsCount, forKey: CacheKey.ecoMessageListingsCount)
             defaults.set(soldCount, forKey: CacheKey.ecoMessageSoldCount)
-            
-            print("DEBUG[ProfileVM] Personalized ecoMessage updated chars=\(response.count)")
-        } catch {
-            // Keep existing deterministic fallback if personalization fails.
-            print("DEBUG[ProfileVM] Failed to generate personalized eco message: \(error.localizedDescription)")
-        }
+        } catch { }
     }
     
     private func versionedProfileImageKey(from urlString: String) -> String {
@@ -361,7 +339,7 @@ final class ProfileViewModel: ObservableObject {
             let uploadedURL = try await ImageUploadService.uploadProfilePic(image)
             let previousCacheKey = profilePicURL
             
-            try await AuthService.shared.updateProfileImage(withImageUrl: uploadedURL)
+            try await SessionManager.shared.updateProfileImage(withImageUrl: uploadedURL)
             
             if !previousCacheKey.isEmpty {
                 CachedRemoteImageView.invalidateCache(for: previousCacheKey)
@@ -371,15 +349,13 @@ final class ProfileViewModel: ObservableObject {
             let versionedURL = versionedProfileImageKey(from: uploadedURL)
             profilePicURL = versionedURL
             UserDefaults.standard.set(versionedURL, forKey: CacheKey.cachedProfilePic)
-        } catch {
-            print("DEBUG: Failed to upload profile image with error \(error.localizedDescription)")
-        }
+        } catch { }
     }
     
     func deleteProfileImage() async {
         do {
             let previousCacheKey = profilePicURL
-            try await AuthService.shared.updateProfileImage(withImageUrl: "")
+            try await SessionManager.shared.updateProfileImage(withImageUrl: "")
             
             if !previousCacheKey.isEmpty {
                 CachedRemoteImageView.invalidateCache(for: previousCacheKey)
@@ -387,9 +363,7 @@ final class ProfileViewModel: ObservableObject {
             
             profilePicURL = ""
             UserDefaults.standard.set("", forKey: CacheKey.cachedProfilePic)
-        } catch {
-            print("DEBUG: Failed to delete profile image with error \(error.localizedDescription)")
-        }
+        } catch { }
     }
     
     var monthlyProductStats: MonthlyProductStats {

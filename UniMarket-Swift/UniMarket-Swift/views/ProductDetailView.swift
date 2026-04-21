@@ -293,7 +293,6 @@ struct ProductDetailView: View {
                                 isStartingChat = false
                             }
                         } catch {
-                            print("DEBUG: failed to start conversation \(error.localizedDescription)")
                             await MainActor.run { isStartingChat = false }
                         }
                     }

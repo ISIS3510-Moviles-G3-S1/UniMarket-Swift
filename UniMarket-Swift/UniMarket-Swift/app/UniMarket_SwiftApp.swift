@@ -40,7 +40,7 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
 @main
 struct UniMarket_SwiftApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    @StateObject private var session = SessionManager()
+    @StateObject private var session = SessionManager.shared
     @StateObject private var chatStore = ChatStore()
     @StateObject private var productStore = ProductStore()
 
