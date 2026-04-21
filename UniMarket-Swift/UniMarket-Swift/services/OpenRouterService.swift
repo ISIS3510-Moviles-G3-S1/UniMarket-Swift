@@ -67,7 +67,7 @@ final class OpenRouterService {
         return trimmed
     }
 
-    func generateStylistReply(prompt: String, catalog: [Product]) async throws -> String {
+    func generateStylistReply(prompt: String, catalog: [Product], photoContext: String? = nil) async throws -> String {
         guard APIConfig.isOpenRouterConfigured() else {
             throw OpenRouterError.missingAPIKey
         }
@@ -111,6 +111,7 @@ final class OpenRouterService {
                     content: """
                     User request: \(prompt)
 
+                    \(photoContext.map { "Photo context: \($0)\n" } ?? "")
                     Available catalog items:
                     \(catalogSummary)
                     """
