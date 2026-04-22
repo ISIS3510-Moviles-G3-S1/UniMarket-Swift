@@ -114,7 +114,7 @@ struct SustainabilityImpactCard: View {
     }
 
     private var waterUnit: String {
-        impact.waterLiters >= 1000 ? "kL water" : "L water"
+        impact.waterLiters >= 1000 ? "L water" : "L water"
     }
 
     private var formattedCO2: String {
