@@ -47,6 +47,10 @@ final class ProfileViewModel: ObservableObject {
     @Published var isGeneratingEcoMessage = false
     @Published var listings: [Product] = []
     @Published var editingListing: Product? = nil
+
+    @Published var impactSummary: SustainabilityImpact = .empty
+    @Published var impactMessage: String = ""
+    @Published var isGeneratingImpact = false
     
     private var cancellables = Set<AnyCancellable>()
     private let productStore = ProductStore()
@@ -62,6 +66,8 @@ final class ProfileViewModel: ObservableObject {
         static let ecoMessageText = "profile.eco.message.text"
         static let ecoMessageListingsCount = "profile.eco.message.listingsCount"
         static let ecoMessageSoldCount = "profile.eco.message.soldCount"
+        static let impactMessageText = "profile.impact.message.text"
+        static let impactMessageSoldCount = "profile.impact.message.soldCount"
     }
     
     init() {
@@ -94,6 +100,7 @@ final class ProfileViewModel: ObservableObject {
         Task {
             await fetchMyListings()
             await refreshPersonalizedEcoMessage(reason: "listing_event")
+            await refreshSustainabilityImpact(reason: "listing_event")
         }
     }
     
@@ -152,9 +159,10 @@ final class ProfileViewModel: ObservableObject {
         }
         
         await fetchMyListings()
-        
+
         // Always refresh on profile tab launch (will use cache if appropriate)
         await refreshPersonalizedEcoMessage(reason: "app_launch")
+        await refreshSustainabilityImpact(reason: "app_launch")
     }
     
     func fetchMyListings() async {
@@ -188,6 +196,11 @@ final class ProfileViewModel: ObservableObject {
             ecoMessage = cachedMessage
         } else {
             updateEcoMessage(xp: xp)
+        }
+
+        // Load cached impact insight if available
+        if let cachedImpact = defaults.string(forKey: CacheKey.impactMessageText), !cachedImpact.isEmpty {
+            impactMessage = cachedImpact
         }
     }
     
@@ -326,7 +339,78 @@ final class ProfileViewModel: ObservableObject {
             defaults.set(soldCount, forKey: CacheKey.ecoMessageSoldCount)
         } catch { }
     }
-    
+
+    // MARK: - Sustainability Impact
+
+    @MainActor
+    func refreshSustainabilityImpact(reason: String) async {
+        let soldListings = listings.filter { $0.soldAt != nil }
+        let summary = SustainabilityImpact.calculate(from: soldListings)
+        impactSummary = summary
+
+        let defaults = UserDefaults.standard
+        let cachedSoldCount = defaults.integer(forKey: CacheKey.impactMessageSoldCount)
+
+        // No sold items yet — skip the API call entirely and show a grounded fallback.
+        guard summary.itemsReused > 0 else {
+            impactMessage = "Sell your first item to start tracking the water, CO2, and waste you keep out of the fast-fashion cycle."
+            return
+        }
+
+        // Only burn API calls when the sold count actually changed (or on explicit listing events).
+        let isStale = summary.itemsReused != cachedSoldCount
+        if reason == "app_launch" && !isStale && !impactMessage.isEmpty { return }
+
+        guard APIConfig.isOpenRouterConfigured() else {
+            impactMessage = fallbackImpactMessage(for: summary)
+            defaults.set(impactMessage, forKey: CacheKey.impactMessageText)
+            defaults.set(summary.itemsReused, forKey: CacheKey.impactMessageSoldCount)
+            return
+        }
+
+        guard !isGeneratingImpact else { return }
+        isGeneratingImpact = true
+        defer { isGeneratingImpact = false }
+
+        let prompt = impactPrompt(for: summary)
+
+        do {
+            let insight = try await OpenRouterService.shared.generateImpactInsight(prompt: prompt)
+            impactMessage = insight.message
+            defaults.set(insight.message, forKey: CacheKey.impactMessageText)
+            defaults.set(summary.itemsReused, forKey: CacheKey.impactMessageSoldCount)
+        } catch {
+            if impactMessage.isEmpty {
+                impactMessage = fallbackImpactMessage(for: summary)
+            }
+        }
+    }
+
+    private func impactPrompt(for impact: SustainabilityImpact) -> String {
+        let breakdown = impact.topCategories
+            .map { "\($0.count)× \($0.category.displayName.lowercased())" }
+            .joined(separator: ", ")
+        let breakdownLine = breakdown.isEmpty ? "mixed garments" : breakdown
+
+        let firstName = displayName.split(separator: " ").first.map(String.init) ?? displayName
+
+        return """
+        Turn these real reuse numbers into one sharp, personal insight for \(firstName).
+        Items given a second life: \(impact.itemsReused)
+        Water kept out of production: \(impact.waterLiters) liters (≈ \(impact.showerEquivalents) showers)
+        CO2 emissions avoided: \(String(format: "%.1f", impact.co2Kg)) kg (≈ \(impact.drivingKilometersAvoided) km of driving, \(String(format: "%.1f", impact.treeYearsEquivalent)) tree-years)
+        Textile waste diverted: \(String(format: "%.1f", impact.wasteKg)) kg
+        Strongest categories: \(breakdownLine)
+        Total transactions on platform: \(transactions)
+        """
+    }
+
+    private func fallbackImpactMessage(for impact: SustainabilityImpact) -> String {
+        let shower = impact.showerEquivalents
+        let co2 = Int(impact.co2Kg.rounded())
+        return "You've given \(impact.itemsReused) items a second life — that's \(impact.waterLiters)L of water (≈\(shower) showers) and \(co2)kg of CO2 spared from new production."
+    }
+
     private func versionedProfileImageKey(from urlString: String) -> String {
         let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "" }

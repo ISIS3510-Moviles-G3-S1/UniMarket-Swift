@@ -57,6 +57,13 @@ struct ProfileView: View {
                     EcoSaysCard(message: vm.ecoMessage, isLoading: vm.isGeneratingEcoMessage)
                         .padding(.horizontal)
 
+                    SustainabilityImpactCard(
+                        impact: vm.impactSummary,
+                        message: vm.impactMessage,
+                        isLoading: vm.isGeneratingImpact
+                    )
+                    .padding(.horizontal)
+
                     SustainabilityProgressCard(
                         xp: vm.xp,
                         xpToNext: vm.xpToNext,
