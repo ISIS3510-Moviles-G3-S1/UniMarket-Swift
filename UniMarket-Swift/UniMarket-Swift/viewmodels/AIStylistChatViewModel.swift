@@ -62,7 +62,7 @@ final class AIStylistChatViewModel: ObservableObject {
         }
     }
 
-    func send(prompt: String, catalog: [Product], referenceImage: UIImage?) async {
+    func send(prompt: String, catalog: [Product], referenceImage: UIImage?, prefersOfflineMode: Bool = false) async {
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || referenceImage != nil else { return }
 
@@ -79,6 +79,11 @@ final class AIStylistChatViewModel: ObservableObject {
         errorMessage = nil
 
         let request = StylistChatRequest(prompt: userMessage, catalog: catalog, referenceImage: referenceImage)
+
+        if prefersOfflineMode {
+            await sendOfflineResponse(for: request)
+            return
+        }
 
         do {
             let response = try await chatbot.respond(to: request)
@@ -102,6 +107,20 @@ final class AIStylistChatViewModel: ObservableObject {
             errorMessage = "Live AI was unavailable, so the stylist used demo mode."
         }
 
+        isSending = false
+    }
+
+    private func sendOfflineResponse(for request: StylistChatRequest) async {
+        if let response = try? await fallbackChatbot.respond(to: request) {
+            messages.append(AIStylistMessage(
+                role: .assistant,
+                text: response.message,
+                suggestedProducts: response.suggestedProducts,
+                attachedImage: nil
+            ))
+            persistMessages()
+        }
+        errorMessage = "You're offline, so the stylist is using local demo mode."
         isSending = false
     }
 

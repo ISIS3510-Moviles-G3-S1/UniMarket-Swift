@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import Combine
 
 @MainActor
 final class NetworkMonitor: ObservableObject {
@@ -10,8 +11,9 @@ final class NetworkMonitor: ObservableObject {
 
     init() {
         monitor.pathUpdateHandler = { [weak self] path in
-            Task { @MainActor in
-                self?.isConnected = path.status == .satisfied
+            let isConnected = path.status == .satisfied
+            DispatchQueue.main.async {
+                self?.isConnected = isConnected
             }
         }
         monitor.start(queue: queue)
