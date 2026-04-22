@@ -1,91 +1,11 @@
-import Combine
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
 #endif
 
-struct AIStylistMessage: Identifiable {
-    enum Role {
-        case assistant
-        case user
-    }
-
-    let id = UUID()
-    let role: Role
-    let text: String
-    let suggestedProducts: [Product]
-    let attachedImage: UIImage?
-}
-
-@MainActor
-final class AIStylistChatViewModel: ObservableObject {
-    @Published private(set) var messages: [AIStylistMessage] = [
-        AIStylistMessage(
-            role: .assistant,
-            text: "Ask for a full outfit, a vibe, or a budget. Example: \"Give me a casual campus outfit under $60.\"",
-            suggestedProducts: [],
-            attachedImage: nil
-        )
-    ]
-    @Published var isSending = false
-    @Published var errorMessage: String?
-
-    private let creator: StylistChatbotCreator
-
-    init(creator: StylistChatbotCreator? = nil) {
-        self.creator = creator ?? StylistChatbotFactory.makeCreator()
-    }
-
-    func send(prompt: String, catalog: [Product], referenceImage: UIImage?) async {
-        let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty || referenceImage != nil else { return }
-
-        let userMessage = trimmed.isEmpty ? "Help me build an outfit that complements this photo." : trimmed
-
-        messages.append(
-            AIStylistMessage(
-                role: .user,
-                text: userMessage,
-                suggestedProducts: [],
-                attachedImage: referenceImage
-            )
-        )
-        isSending = true
-        errorMessage = nil
-
-        let request = StylistChatRequest(prompt: userMessage, catalog: catalog, referenceImage: referenceImage)
-
-        do {
-            let response = try await creator.makeChatbot().respond(to: request)
-            messages.append(
-                AIStylistMessage(
-                    role: .assistant,
-                    text: response.message,
-                    suggestedProducts: response.suggestedProducts,
-                    attachedImage: nil
-                )
-            )
-        } catch {
-            let fallback = MockStylistChatbotCreator().makeChatbot()
-            if let response = try? await fallback.respond(to: request) {
-                messages.append(
-                    AIStylistMessage(
-                        role: .assistant,
-                        text: response.message,
-                        suggestedProducts: response.suggestedProducts,
-                        attachedImage: nil
-                    )
-                )
-            }
-            errorMessage = "Live AI was unavailable, so the stylist used demo mode."
-        }
-
-        isSending = false
-    }
-}
-
 struct AIStylistChatView: View {
     @EnvironmentObject private var productStore: ProductStore
+    @EnvironmentObject private var session: SessionManager
     @Environment(\.hideTabBar) private var hideTabBar
     @StateObject private var viewModel = AIStylistChatViewModel()
     @State private var draftMessage = ""
@@ -221,16 +141,9 @@ struct AIStylistChatView: View {
                             ProductDetailView(product: product)
                         } label: {
                             HStack(spacing: 12) {
-                                AsyncImage(url: URL(string: product.primaryImageURL ?? "")) { image in
-                                    image
-                                        .resizable()
-                                        .scaledToFill()
-                                } placeholder: {
-                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .fill(Color.gray.opacity(0.15))
-                                }
-                                .frame(width: 56, height: 56)
-                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                CachedRemoteImageView(urlString: product.primaryImageURL ?? "")
+                                    .frame(width: 56, height: 56)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(product.title)
@@ -309,7 +222,8 @@ struct AIStylistChatView: View {
                     draftMessage = ""
                     selectedReferenceImage = nil
                     Task {
-                        await viewModel.send(prompt: prompt, catalog: productStore.activeProducts, referenceImage: referenceImage)
+                        let catalog = productStore.browseProducts(excludingUserID: session.uid)
+                        await viewModel.send(prompt: prompt, catalog: catalog, referenceImage: referenceImage)
                     }
                 } label: {
                     if viewModel.isSending {

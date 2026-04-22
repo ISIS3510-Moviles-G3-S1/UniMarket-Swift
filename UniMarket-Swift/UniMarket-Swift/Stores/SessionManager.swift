@@ -13,14 +13,21 @@ import FirebaseFirestore
 
 @MainActor
 final class SessionManager: ObservableObject {
+    static let shared = SessionManager()
+
     private let db = Firestore.firestore()
     private let analytics = AnalyticsService.shared
+
     @Published var user: FirebaseAuth.User? = nil
+    @Published var currentUser: User?
     @Published var isLoading = true
 
-    // Keep auth state derived from the current user to avoid divergent flags.
     var isLoggedIn: Bool {
         user?.isEmailVerified == true
+    }
+
+    var uid: String? {
+        user?.uid
     }
 
     private var authListener: AuthStateDidChangeListenerHandle?
@@ -32,6 +39,11 @@ final class SessionManager: ObservableObject {
                 self.user = user
                 self.isLoading = false
                 self.updateAnalyticsUserState(for: user)
+                if user != nil {
+                    await self.fetchUser()
+                } else {
+                    self.currentUser = nil
+                }
             }
         }
     }
@@ -100,10 +112,26 @@ final class SessionManager: ObservableObject {
         }
     }
 
+    // MARK: - User Profile
+    func fetchUser() async {
+        guard let uid = user?.uid else { return }
+        do {
+            let snapshot = try await db.collection("users").document(uid).getDocument()
+            currentUser = try snapshot.data(as: User.self)
+        } catch { }
+    }
+
+    func updateProfileImage(withImageUrl imageUrl: String) async throws {
+        guard let uid = user?.uid else { return }
+        try await db.collection("users").document(uid).updateData(["profilePic": imageUrl])
+        currentUser?.profilePic = imageUrl
+    }
+
     // MARK: - Sign Out
     func signOut() throws {
         try Auth.auth().signOut()
         user = nil
+        currentUser = nil
         isLoading = false
         analytics.track(.signOut())
         analytics.reset()

@@ -10,10 +10,15 @@ import SwiftUI
 struct HomeView: View {
     @EnvironmentObject private var chatStore: ChatStore
     @EnvironmentObject private var productStore: ProductStore
+    @EnvironmentObject private var session: SessionManager
     @StateObject private var viewModel = HomeViewModel()
 
     let onBrowseItems: () -> Void
     let onStartSelling: () -> Void
+
+    private var browseProducts: [Product] {
+        productStore.browseProducts(excludingUserID: session.uid)
+    }
 
     var body: some View {
         ZStack {
@@ -31,7 +36,7 @@ struct HomeView: View {
 
                     seasonSection
 
-                    FeaturedProductCard(product: productStore.activeProducts.first)
+                    FeaturedProductCard(product: browseProducts.first)
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
@@ -65,13 +70,13 @@ struct HomeView: View {
 #if DEBUG
         SeasonForYouSection(
             season: viewModel.currentSeason(),
-            products: viewModel.productsForCurrentSeason(from: productStore.activeProducts),
+            products: viewModel.productsForCurrentSeason(from: browseProducts),
             debugSelection: $viewModel.debugSeasonSelection
         )
 #else
         SeasonForYouSection(
             season: viewModel.currentSeason(),
-            products: viewModel.productsForCurrentSeason(from: productStore.activeProducts)
+            products: viewModel.productsForCurrentSeason(from: browseProducts)
         )
 #endif
     }

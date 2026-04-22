@@ -20,7 +20,6 @@ struct ImageUploadService {
             let url = try await ref.downloadURL()
             return url.absoluteString
         } catch {
-            print("DEBUG: Failed to upload profile image with error \(error.localizedDescription)")
             throw error
         }
     }
@@ -41,7 +40,6 @@ struct ImageUploadService {
             let url = try await ref.downloadURL()
             return url.absoluteString
         } catch {
-            print("DEBUG: Failed to upload listing image with error \(error.localizedDescription)")
             throw error
         }
     }
@@ -63,7 +61,6 @@ struct ImageUploadService {
             let url = try await ref.downloadURL()
             return url.absoluteString
         } catch {
-            print("DEBUG: Failed to upload message image with error \(error.localizedDescription)")
             throw error
         }
     }

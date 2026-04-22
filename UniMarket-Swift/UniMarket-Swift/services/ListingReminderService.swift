@@ -6,7 +6,7 @@ actor ListingReminderService {
 
     private let center = UNUserNotificationCenter.current()
     private let defaults = UserDefaults.standard
-    private let reminderInterval: TimeInterval = 60 //* 60 * 24 * 7
+    private let reminderInterval: TimeInterval = 60 * 60 * 24 * 7
 
     private init() {}
 
@@ -55,9 +55,7 @@ actor ListingReminderService {
 
         do {
             try await center.add(request)
-        } catch {
-            print("Failed to schedule reminder: \(error.localizedDescription)")
-        }
+        } catch { }
     }
 
     private func requestAuthorizationIfNeeded() async -> Bool {
@@ -70,7 +68,6 @@ actor ListingReminderService {
             do {
                 return try await center.requestAuthorization(options: [.alert, .badge, .sound])
             } catch {
-                print("Failed to request notification authorization: \(error.localizedDescription)")
                 return false
             }
         case .denied:

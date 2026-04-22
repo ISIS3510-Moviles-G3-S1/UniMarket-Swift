@@ -7,7 +7,6 @@
 
 import SwiftUI
 import Combine
-import FirebaseAuth
 
 final class ProfileViewModel: ObservableObject {
     struct MonthlyProductStats {
@@ -48,6 +47,10 @@ final class ProfileViewModel: ObservableObject {
     @Published var isGeneratingEcoMessage = false
     @Published var listings: [Product] = []
     @Published var editingListing: Product? = nil
+
+    @Published var impactSummary: SustainabilityImpact = .empty
+    @Published var impactMessage: String = ""
+    @Published var isGeneratingImpact = false
     
     private var cancellables = Set<AnyCancellable>()
     private let productStore = ProductStore()
@@ -63,6 +66,8 @@ final class ProfileViewModel: ObservableObject {
         static let ecoMessageText = "profile.eco.message.text"
         static let ecoMessageListingsCount = "profile.eco.message.listingsCount"
         static let ecoMessageSoldCount = "profile.eco.message.soldCount"
+        static let impactMessageText = "profile.impact.message.text"
+        static let impactMessageSoldCount = "profile.impact.message.soldCount"
     }
     
     init() {
@@ -92,15 +97,15 @@ final class ProfileViewModel: ObservableObject {
     }
     
     private func onListingEvent() {
-        print("DEBUG[ProfileVM] Listing event detected - will refresh eco message")
         Task {
             await fetchMyListings()
             await refreshPersonalizedEcoMessage(reason: "listing_event")
+            await refreshSustainabilityImpact(reason: "listing_event")
         }
     }
     
     func setupSubscribers() {
-        AuthService.shared.$currentUser
+        SessionManager.shared.$currentUser
             .receive(on: DispatchQueue.main)
             .sink { [weak self] user in
                 guard let self else { return }
@@ -116,8 +121,8 @@ final class ProfileViewModel: ObservableObject {
     
     @MainActor
     func onProfileTabSelected() async {
-        await AuthService.shared.fetchUser()
-        guard let user = AuthService.shared.currentUser else { return }
+        await SessionManager.shared.fetchUser()
+        guard let user = SessionManager.shared.currentUser else { return }
         
         let levelInfo = calculateLevelInfo(xp: user.xpPoints)
         var didChange = false
@@ -154,13 +159,14 @@ final class ProfileViewModel: ObservableObject {
         }
         
         await fetchMyListings()
-        
+
         // Always refresh on profile tab launch (will use cache if appropriate)
         await refreshPersonalizedEcoMessage(reason: "app_launch")
+        await refreshSustainabilityImpact(reason: "app_launch")
     }
     
     func fetchMyListings() async {
-        guard let uid = Auth.auth().currentUser?.uid else {
+        guard let uid = SessionManager.shared.currentUser?.id else {
             await MainActor.run { listings = [] }
             return
         }
@@ -190,6 +196,11 @@ final class ProfileViewModel: ObservableObject {
             ecoMessage = cachedMessage
         } else {
             updateEcoMessage(xp: xp)
+        }
+
+        // Load cached impact insight if available
+        if let cachedImpact = defaults.string(forKey: CacheKey.impactMessageText), !cachedImpact.isEmpty {
+            impactMessage = cachedImpact
         }
     }
     
@@ -290,29 +301,18 @@ final class ProfileViewModel: ObservableObject {
 
     @MainActor
     private func refreshPersonalizedEcoMessage(reason: String) async {
-        print("DEBUG[ProfileVM] refreshPersonalizedEcoMessage called reason=\(reason)")
-
-        guard APIConfig.isOpenRouterConfigured() else {
-            print("DEBUG[ProfileVM] OpenRouter not configured. Skipping personalization.")
-            return
-        }
-        guard !isGeneratingEcoMessage else {
-            print("DEBUG[ProfileVM] Personalization already in progress. Skipping duplicate call.")
-            return
-        }
+        guard APIConfig.isOpenRouterConfigured() else { return }
+        guard !isGeneratingEcoMessage else { return }
 
         let levelInfo = calculateLevelInfo(xp: xp)
         let listingsCount = listings.count
         let soldCount = listings.filter { $0.soldAt != nil }.count
-        
-        // Check if counts have changed since last generation
+
         let defaults = UserDefaults.standard
         let lastListingsCount = defaults.integer(forKey: CacheKey.ecoMessageListingsCount)
         let lastSoldCount = defaults.integer(forKey: CacheKey.ecoMessageSoldCount)
-        
-        // Skip if coming from app_launch and counts haven't changed
+
         if reason == "app_launch" && listingsCount == lastListingsCount && soldCount == lastSoldCount {
-            print("DEBUG[ProfileVM] Counts unchanged since last generation (listings=\(listingsCount), sold=\(soldCount)). Using cached message.")
             return
         }
 
@@ -331,24 +331,86 @@ final class ProfileViewModel: ObservableObject {
         Total transactions: \(transactions)
         """
 
-        print("DEBUG[ProfileVM] Sending personalization request reason=\(reason) listings=\(listingsCount) sold=\(soldCount) xp=\(xp)")
-
         do {
             let response = try await OpenRouterService.shared.generateEcoRecommendation(prompt: prompt)
             ecoMessage = response
-            
-            // Cache the message and current counts
             defaults.set(response, forKey: CacheKey.ecoMessageText)
             defaults.set(listingsCount, forKey: CacheKey.ecoMessageListingsCount)
             defaults.set(soldCount, forKey: CacheKey.ecoMessageSoldCount)
-            
-            print("DEBUG[ProfileVM] Personalized ecoMessage updated chars=\(response.count)")
+        } catch { }
+    }
+
+    // MARK: - Sustainability Impact
+
+    @MainActor
+    func refreshSustainabilityImpact(reason: String) async {
+        let soldListings = listings.filter { $0.soldAt != nil }
+        let summary = SustainabilityImpact.calculate(from: soldListings)
+        impactSummary = summary
+
+        let defaults = UserDefaults.standard
+        let cachedSoldCount = defaults.integer(forKey: CacheKey.impactMessageSoldCount)
+
+        // No sold items yet — skip the API call entirely and show a grounded fallback.
+        guard summary.itemsReused > 0 else {
+            impactMessage = "Sell your first item to start tracking the water, CO2, and waste you keep out of the fast-fashion cycle."
+            return
+        }
+
+        // Only burn API calls when the sold count actually changed (or on explicit listing events).
+        let isStale = summary.itemsReused != cachedSoldCount
+        if reason == "app_launch" && !isStale && !impactMessage.isEmpty { return }
+
+        guard APIConfig.isOpenRouterConfigured() else {
+            impactMessage = fallbackImpactMessage(for: summary)
+            defaults.set(impactMessage, forKey: CacheKey.impactMessageText)
+            defaults.set(summary.itemsReused, forKey: CacheKey.impactMessageSoldCount)
+            return
+        }
+
+        guard !isGeneratingImpact else { return }
+        isGeneratingImpact = true
+        defer { isGeneratingImpact = false }
+
+        let prompt = impactPrompt(for: summary)
+
+        do {
+            let insight = try await OpenRouterService.shared.generateImpactInsight(prompt: prompt)
+            impactMessage = insight.message
+            defaults.set(insight.message, forKey: CacheKey.impactMessageText)
+            defaults.set(summary.itemsReused, forKey: CacheKey.impactMessageSoldCount)
         } catch {
-            // Keep existing deterministic fallback if personalization fails.
-            print("DEBUG[ProfileVM] Failed to generate personalized eco message: \(error.localizedDescription)")
+            if impactMessage.isEmpty {
+                impactMessage = fallbackImpactMessage(for: summary)
+            }
         }
     }
-    
+
+    private func impactPrompt(for impact: SustainabilityImpact) -> String {
+        let breakdown = impact.topCategories
+            .map { "\($0.count)× \($0.category.displayName.lowercased())" }
+            .joined(separator: ", ")
+        let breakdownLine = breakdown.isEmpty ? "mixed garments" : breakdown
+
+        let firstName = displayName.split(separator: " ").first.map(String.init) ?? displayName
+
+        return """
+        Turn these real reuse numbers into one sharp, personal insight for \(firstName).
+        Items given a second life: \(impact.itemsReused)
+        Water kept out of production: \(impact.waterLiters) liters (≈ \(impact.showerEquivalents) showers)
+        CO2 emissions avoided: \(String(format: "%.1f", impact.co2Kg)) kg (≈ \(impact.drivingKilometersAvoided) km of driving, \(String(format: "%.1f", impact.treeYearsEquivalent)) tree-years)
+        Textile waste diverted: \(String(format: "%.1f", impact.wasteKg)) kg
+        Strongest categories: \(breakdownLine)
+        Total transactions on platform: \(transactions)
+        """
+    }
+
+    private func fallbackImpactMessage(for impact: SustainabilityImpact) -> String {
+        let shower = impact.showerEquivalents
+        let co2 = Int(impact.co2Kg.rounded())
+        return "You've given \(impact.itemsReused) items a second life — that's \(impact.waterLiters)L of water (≈\(shower) showers) and \(co2)kg of CO2 spared from new production."
+    }
+
     private func versionedProfileImageKey(from urlString: String) -> String {
         let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "" }
@@ -361,7 +423,7 @@ final class ProfileViewModel: ObservableObject {
             let uploadedURL = try await ImageUploadService.uploadProfilePic(image)
             let previousCacheKey = profilePicURL
             
-            try await AuthService.shared.updateProfileImage(withImageUrl: uploadedURL)
+            try await SessionManager.shared.updateProfileImage(withImageUrl: uploadedURL)
             
             if !previousCacheKey.isEmpty {
                 CachedRemoteImageView.invalidateCache(for: previousCacheKey)
@@ -371,15 +433,13 @@ final class ProfileViewModel: ObservableObject {
             let versionedURL = versionedProfileImageKey(from: uploadedURL)
             profilePicURL = versionedURL
             UserDefaults.standard.set(versionedURL, forKey: CacheKey.cachedProfilePic)
-        } catch {
-            print("DEBUG: Failed to upload profile image with error \(error.localizedDescription)")
-        }
+        } catch { }
     }
     
     func deleteProfileImage() async {
         do {
             let previousCacheKey = profilePicURL
-            try await AuthService.shared.updateProfileImage(withImageUrl: "")
+            try await SessionManager.shared.updateProfileImage(withImageUrl: "")
             
             if !previousCacheKey.isEmpty {
                 CachedRemoteImageView.invalidateCache(for: previousCacheKey)
@@ -387,9 +447,7 @@ final class ProfileViewModel: ObservableObject {
             
             profilePicURL = ""
             UserDefaults.standard.set("", forKey: CacheKey.cachedProfilePic)
-        } catch {
-            print("DEBUG: Failed to delete profile image with error \(error.localizedDescription)")
-        }
+        } catch { }
     }
     
     var monthlyProductStats: MonthlyProductStats {
