@@ -5,6 +5,7 @@ import UIKit
 
 struct AIStylistChatView: View {
     @EnvironmentObject private var productStore: ProductStore
+    @EnvironmentObject private var session: SessionManager
     @Environment(\.hideTabBar) private var hideTabBar
     @StateObject private var viewModel = AIStylistChatViewModel()
     @State private var draftMessage = ""
@@ -221,7 +222,8 @@ struct AIStylistChatView: View {
                     draftMessage = ""
                     selectedReferenceImage = nil
                     Task {
-                        await viewModel.send(prompt: prompt, catalog: productStore.activeProducts, referenceImage: referenceImage)
+                        let catalog = productStore.browseProducts(excludingUserID: session.uid)
+                        await viewModel.send(prompt: prompt, catalog: catalog, referenceImage: referenceImage)
                     }
                 } label: {
                     if viewModel.isSending {

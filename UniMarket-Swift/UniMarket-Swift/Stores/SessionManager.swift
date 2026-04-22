@@ -26,6 +26,10 @@ final class SessionManager: ObservableObject {
         user?.isEmailVerified == true
     }
 
+    var uid: String? {
+        user?.uid
+    }
+
     private var authListener: AuthStateDidChangeListenerHandle?
 
     init() {

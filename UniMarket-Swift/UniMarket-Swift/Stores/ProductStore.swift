@@ -40,6 +40,11 @@ final class ProductStore: ObservableObject {
             .sorted { $0.createdAt > $1.createdAt }
     }
 
+    func browseProducts(excludingUserID userID: String?) -> [Product] {
+        guard let userID, !userID.isEmpty else { return activeProducts }
+        return activeProducts.filter { $0.sellerId != userID }
+    }
+
     func prefetchImages(for products: [Product]) {
         let urls = products
             .flatMap { $0.imageURLs }
