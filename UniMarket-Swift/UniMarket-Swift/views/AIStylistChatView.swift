@@ -7,7 +7,7 @@ struct AIStylistChatView: View {
     @EnvironmentObject private var productStore: ProductStore
     @EnvironmentObject private var session: SessionManager
     @Environment(\.hideTabBar) private var hideTabBar
-    @StateObject private var viewModel = AIStylistChatViewModel()
+    @StateObject private var viewModel: AIStylistChatViewModel
     @StateObject private var networkMonitor = NetworkMonitor()
     @State private var draftMessage = ""
     @State private var selectedReferenceImage: UIImage?
@@ -19,6 +19,10 @@ struct AIStylistChatView: View {
         "I need a neutral outfit for class",
         "Build an outfit around this piece"
     ]
+
+    init(conversationID: String? = nil) {
+        _viewModel = StateObject(wrappedValue: AIStylistChatViewModel(conversationID: conversationID))
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -68,7 +72,7 @@ struct AIStylistChatView: View {
             inputBar
         }
         .background(AppTheme.background)
-        .navigationTitle("AI Stylist")
+        .navigationTitle(viewModel.conversationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             withAnimation {

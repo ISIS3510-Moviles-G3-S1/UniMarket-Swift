@@ -26,7 +26,7 @@ struct ChatInboxView: View {
         List {
             Section {
                 NavigationLink {
-                    AIStylistChatView()
+                    AIStylistHistoryView()
                 } label: {
                     HStack(spacing: 12) {
                         ZStack {
@@ -42,7 +42,7 @@ struct ChatInboxView: View {
                             Text("AI Stylist")
                                 .font(.poppinsSemiBold(14))
                                 .foregroundStyle(AppTheme.primaryText)
-                            Text("Ask for a full outfit from items in the app.")
+                            Text("Browse saved outfit chats or start a new one.")
                                 .font(.poppinsRegular(12))
                                 .foregroundStyle(AppTheme.secondaryText)
                                 .lineLimit(2)
