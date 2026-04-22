@@ -4,6 +4,7 @@ struct AIStylistHistoryView: View {
     @Environment(\.hideTabBar) private var hideTabBar
     @StateObject private var viewModel = AIStylistHistoryViewModel()
     @StateObject private var networkMonitor = NetworkMonitor()
+    @FocusState private var isSearchFocused: Bool
 
     var body: some View {
         Group {
@@ -18,7 +19,6 @@ struct AIStylistHistoryView: View {
         .background(AppTheme.background)
         .navigationTitle("AI Stylist")
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $viewModel.searchText, prompt: "Search saved stylist chats")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink {
@@ -51,6 +51,10 @@ struct AIStylistHistoryView: View {
     private var content: some View {
         List {
             Section {
+                searchBar
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    .listRowBackground(AppTheme.background)
+
                 if !networkMonitor.isConnected {
                     offlineBanner
                         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
@@ -117,6 +121,32 @@ struct AIStylistHistoryView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+    }
+
+    private var searchBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(AppTheme.secondaryText)
+
+            TextField("Search saved stylist chats", text: $viewModel.searchText)
+                .font(.poppinsRegular(14))
+                .foregroundStyle(AppTheme.primaryText)
+                .focused($isSearchFocused)
+
+            if !viewModel.searchText.isEmpty {
+                Button {
+                    viewModel.searchText = ""
+                    isSearchFocused = false
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(AppTheme.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private var offlineBanner: some View {
