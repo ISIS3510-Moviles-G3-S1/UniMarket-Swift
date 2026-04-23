@@ -9,6 +9,7 @@ import SwiftUI
 import Combine
 import FirebaseAuth
 
+@MainActor
 final class SearchViewModel: ObservableObject {
     enum SearchSection: String, CaseIterable, Identifiable {
         case browse = "Browse"
@@ -37,6 +38,8 @@ final class SearchViewModel: ObservableObject {
     @Published var minPrice: Int = 0
     @Published var maxPrice: Int = 0
     @Published private(set) var recentSearches: [String] = []
+    @Published private(set) var recommendedProducts: [Product] = []
+    @Published private(set) var isLoadingRecommendations = false
 
     @Published var products: [Product] = [] {
         didSet {
@@ -118,38 +121,16 @@ final class SearchViewModel: ObservableObject {
         }
     }
 
-    var recommendedProducts: [Product] {
-        let favoriteTagWeights = favoriteTagWeights()
-        let recentTerms = recentSearchTerms()
-
-        guard !favoriteTagWeights.isEmpty || !recentTerms.isEmpty else {
-            return []
-        }
-
-        return products
-            .filter { !$0.isFavorite }
-            .compactMap { product -> (product: Product, score: Int)? in
-                let score = recommendationScore(for: product, favoriteTagWeights: favoriteTagWeights, recentTerms: recentTerms)
-                guard score > 0 else { return nil }
-                return (product, score)
-            }
-            .sorted { lhs, rhs in
-                if lhs.score == rhs.score {
-                    return lhs.product.createdAt > rhs.product.createdAt
-                }
-                return lhs.score > rhs.score
-            }
-            .map(\.product)
-    }
-
     func toggleFavorite(for product: Product) {
         guard let idx = products.firstIndex(where: { $0.id == product.id }) else { return }
         products[idx].isFavorite.toggle()
+        scheduleRecommendationRefresh()
     }
 
     func updateProducts(_ products: [Product]) {
         let uid = Auth.auth().currentUser?.uid
         self.products = products.filter { $0.sellerId != uid }
+        scheduleRecommendationRefresh()
     }
 
     func selectTag(_ tag: String?) {
@@ -200,9 +181,84 @@ final class SearchViewModel: ObservableObject {
         }
 
         defaults.set(recentSearches, forKey: recentSearchesKey)
+        scheduleRecommendationRefresh()
     }
 
-    private func favoriteTagWeights() -> [String: Int] {
+    func refreshRecommendations() async {
+        let products = self.products
+        let recentSearches = self.recentSearches
+
+        isLoadingRecommendations = true
+
+        let recommendations = await Task.detached(priority: .userInitiated) {
+            await SearchRecommendationEngine.buildRecommendations(from: products, recentSearches: recentSearches)
+        }.value
+
+        self.recommendedProducts = recommendations
+        isLoadingRecommendations = false
+    }
+
+    private func scheduleRecommendationRefresh() {
+        Task { [weak self] in
+            await self?.refreshRecommendations()
+        }
+    }
+}
+
+private enum SearchRecommendationEngine {
+    struct RecommendationSignals {
+        let favoriteTagWeights: [String: Int]
+        let recentSearchTerms: [String]
+        let preferredConditions: Set<String>
+        let averageFavoritePrice: Double?
+    }
+
+    nonisolated static func buildRecommendations(from products: [Product], recentSearches: [String]) async -> [Product] {
+        guard !products.isEmpty else { return [] }
+
+        async let favoriteTagWeights = computeFavoriteTagWeights(from: products)
+        async let recentSearchTerms = computeRecentSearchTerms(from: recentSearches)
+        async let preferredConditions = computePreferredConditions(from: products)
+        async let averageFavoritePrice = computeAverageFavoritePrice(from: products)
+
+        let signals = await RecommendationSignals(
+            favoriteTagWeights: favoriteTagWeights,
+            recentSearchTerms: recentSearchTerms,
+            preferredConditions: preferredConditions,
+            averageFavoritePrice: averageFavoritePrice
+        )
+
+        guard !signals.favoriteTagWeights.isEmpty || !signals.recentSearchTerms.isEmpty else {
+            return []
+        }
+
+        return await withTaskGroup(of: (Product, Int)?.self, returning: [Product].self) { group in
+            for product in products where !product.isFavorite {
+                group.addTask {
+                    let score = await recommendationScore(for: product, signals: signals)
+                    guard score > 0 else { return nil }
+                    return (product, score)
+                }
+            }
+
+            var rankedProducts: [(product: Product, score: Int)] = []
+            for await candidate in group {
+                guard let candidate else { continue }
+                rankedProducts.append(candidate)
+            }
+
+            return rankedProducts
+                .sorted { lhs, rhs in
+                    if lhs.score == rhs.score {
+                        return lhs.product.createdAt > rhs.product.createdAt
+                    }
+                    return lhs.score > rhs.score
+                }
+                .map(\.product)
+        }
+    }
+
+    nonisolated static func computeFavoriteTagWeights(from products: [Product]) -> [String: Int] {
         let favoriteProducts = products.filter(\.isFavorite)
         var weights: [String: Int] = [:]
 
@@ -217,27 +273,76 @@ final class SearchViewModel: ObservableObject {
         return weights
     }
 
-    private func recentSearchTerms() -> [String] {
+    nonisolated static func computeRecentSearchTerms(from recentSearches: [String]) -> [String] {
         recentSearches
             .flatMap { $0.components(separatedBy: CharacterSet.alphanumerics.inverted) }
             .map(normalize)
             .filter { $0.count >= 2 }
     }
 
-    private func recommendationScore(
-        for product: Product,
-        favoriteTagWeights: [String: Int],
-        recentTerms: [String]
-    ) -> Int {
+    nonisolated static func computePreferredConditions(from products: [Product]) -> Set<String> {
+        Set(
+            products
+                .filter(\.isFavorite)
+                .map { normalize($0.conditionTag) }
+                .filter { !$0.isEmpty }
+        )
+    }
+
+    nonisolated static func computeAverageFavoritePrice(from products: [Product]) -> Double? {
+        let favoritePrices = products
+            .filter(\.isFavorite)
+            .map(\.price)
+
+        guard !favoritePrices.isEmpty else { return nil }
+        let total = favoritePrices.reduce(0, +)
+        return Double(total) / Double(favoritePrices.count)
+    }
+
+    nonisolated static func recommendationScore(for product: Product, signals: RecommendationSignals) async -> Int {
+        await withTaskGroup(of: Int.self, returning: Int.self) { group in
+            group.addTask {
+                scoreFavoriteTags(for: product, weights: signals.favoriteTagWeights)
+            }
+            group.addTask {
+                scoreRecentSearches(for: product, recentTerms: signals.recentSearchTerms)
+            }
+            group.addTask {
+                scoreConditionAndPriceFit(
+                    for: product,
+                    preferredConditions: signals.preferredConditions,
+                    averageFavoritePrice: signals.averageFavoritePrice
+                )
+            }
+            group.addTask {
+                scoreFreshnessAndQuality(for: product)
+            }
+
+            var total = 0
+            for await partialScore in group {
+                total += partialScore
+            }
+            return total
+        }
+    }
+
+    nonisolated static func scoreFavoriteTags(for product: Product, weights: [String: Int]) -> Int {
+        let normalizedTags = product.tags.map(normalize)
+        var score = 0
+
+        for tag in normalizedTags {
+            score += weights[tag, default: 0]
+        }
+
+        return score
+    }
+
+    nonisolated static func scoreRecentSearches(for product: Product, recentTerms: [String]) -> Int {
         let normalizedTags = product.tags.map(normalize)
         let title = normalize(product.title)
         let description = normalize(product.description)
 
         var score = 0
-
-        for tag in normalizedTags {
-            score += favoriteTagWeights[tag, default: 0]
-        }
 
         for term in recentTerms {
             if normalizedTags.contains(where: { $0.contains(term) || term.contains($0) }) {
@@ -251,14 +356,53 @@ final class SearchViewModel: ObservableObject {
             }
         }
 
-        if score > 0 {
-            score += min(product.tags.count, 3)
+        return score
+    }
+
+    nonisolated static func scoreConditionAndPriceFit(
+        for product: Product,
+        preferredConditions: Set<String>,
+        averageFavoritePrice: Double?
+    ) -> Int {
+        var score = 0
+        let normalizedCondition = normalize(product.conditionTag)
+
+        if preferredConditions.contains(normalizedCondition) {
+            score += 2
+        }
+
+        if let averageFavoritePrice {
+            let distance = abs(Double(product.price) - averageFavoritePrice)
+            if distance <= 20000 {
+                score += 3
+            } else if distance <= 40000 {
+                score += 1
+            }
         }
 
         return score
     }
 
-    private func normalize(_ value: String) -> String {
+    nonisolated static func scoreFreshnessAndQuality(for product: Product) -> Int {
+        var score = min(product.tags.count, 3)
+
+        if product.rating >= 4.5 {
+            score += 2
+        } else if product.rating >= 4.0 {
+            score += 1
+        }
+
+        let ageInDays = Calendar.current.dateComponents([.day], from: product.createdAt, to: .now).day ?? 0
+        if ageInDays <= 7 {
+            score += 2
+        } else if ageInDays <= 21 {
+            score += 1
+        }
+
+        return score
+    }
+
+    nonisolated static func normalize(_ value: String) -> String {
         value
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()

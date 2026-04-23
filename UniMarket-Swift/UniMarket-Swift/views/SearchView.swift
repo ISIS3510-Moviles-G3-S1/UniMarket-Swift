@@ -202,7 +202,13 @@ struct SearchView: View {
                 }
             }
 
-            if vm.recommendedProducts.isEmpty {
+            if vm.isLoadingRecommendations && vm.recommendedProducts.isEmpty {
+                ProgressView("Building recommendations...")
+                    .font(.poppinsRegular(14))
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 8)
+            } else if vm.recommendedProducts.isEmpty {
                 Text("Like products and search for items to unlock personalized recommendations.")
                     .font(.poppinsRegular(14))
                     .foregroundStyle(AppTheme.secondaryText)
