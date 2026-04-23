@@ -4,6 +4,7 @@ import UIKit
 struct OpenRouterStylistChatbot: StylistChatbot {
     private let service = OpenRouterService.shared
     private let imageAnalyzer = CoreMLAnalysisFacade()
+    private let analysisCache = ChatPhotoAnalysisCache.shared
 
     func respond(to request: StylistChatRequest) async throws -> StylistChatResponse {
         let photoContext = await makePhotoContext(for: request.referenceImage)
@@ -24,7 +25,7 @@ struct OpenRouterStylistChatbot: StylistChatbot {
     private func makePhotoContext(for image: UIImage?) async -> String? {
         guard let image else { return nil }
 
-        guard let result = try? await imageAnalyzer.analyzeImage(image) else {
+        guard let result = try? await analysisCache.analyze(image, using: imageAnalyzer) else {
             return "The user uploaded a clothing photo and wants an outfit that complements it."
         }
 
