@@ -7,7 +7,8 @@ struct AIStylistChatView: View {
     @EnvironmentObject private var productStore: ProductStore
     @EnvironmentObject private var session: SessionManager
     @Environment(\.hideTabBar) private var hideTabBar
-    @StateObject private var viewModel = AIStylistChatViewModel()
+    @StateObject private var viewModel: AIStylistChatViewModel
+    @StateObject private var networkMonitor = NetworkMonitor()
     @State private var draftMessage = ""
     @State private var selectedReferenceImage: UIImage?
     @State private var showPhotoLibrary = false
@@ -19,11 +20,19 @@ struct AIStylistChatView: View {
         "Build an outfit around this piece"
     ]
 
+    init(conversationID: String? = nil) {
+        _viewModel = StateObject(wrappedValue: AIStylistChatViewModel(conversationID: conversationID))
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
+                        if !networkMonitor.isConnected {
+                            offlineBanner
+                        }
+
                         promptStrip
 
                         ForEach(viewModel.messages) { message in
@@ -63,7 +72,7 @@ struct AIStylistChatView: View {
             inputBar
         }
         .background(AppTheme.background)
-        .navigationTitle("AI Stylist")
+        .navigationTitle(viewModel.conversationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             withAnimation {
@@ -98,6 +107,24 @@ struct AIStylistChatView: View {
                 }
             }
         }
+    }
+
+    private var offlineBanner: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "wifi.slash")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.orange)
+
+            Text("No connection. Your saved chat history is available, and new replies will use the local stylist.")
+                .font(.poppinsRegular(12))
+                .foregroundStyle(AppTheme.primaryText)
+
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color.orange.opacity(0.12))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func stylistBubble(_ message: AIStylistMessage) -> some View {
@@ -223,7 +250,12 @@ struct AIStylistChatView: View {
                     selectedReferenceImage = nil
                     Task {
                         let catalog = productStore.browseProducts(excludingUserID: session.uid)
-                        await viewModel.send(prompt: prompt, catalog: catalog, referenceImage: referenceImage)
+                        await viewModel.send(
+                            prompt: prompt,
+                            catalog: catalog,
+                            referenceImage: referenceImage,
+                            prefersOfflineMode: !networkMonitor.isConnected
+                        )
                     }
                 } label: {
                     if viewModel.isSending {
