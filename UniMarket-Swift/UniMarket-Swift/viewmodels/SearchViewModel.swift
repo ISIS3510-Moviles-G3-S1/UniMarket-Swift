@@ -5,111 +5,63 @@
 //  Created by Mariana Pineda on 1/03/26.
 //
 
-import SwiftUI
-import Combine
-import FirebaseAuth
+import Foundation
 
-@MainActor
-final class SearchViewModel: ObservableObject {
-    enum SearchSection: String, CaseIterable, Identifiable {
-        case browse = "Browse"
-        case forYou = "For You"
+enum SearchSection: String, CaseIterable, Identifiable {
+    case browse = "Browse"
+    case forYou = "For You"
 
-        var id: String { rawValue }
-    }
+    var id: String { rawValue }
+}
 
-    enum SortOption: String, CaseIterable, Identifiable {
-        case relevance = "Relevance"
-        case priceLowHigh = "Price: Low to High"
-        case priceHighLow = "Price: High to Low"
-        case ratingHighLow = "Rating: High to Low"
+enum SearchSortOption: String, CaseIterable, Identifiable, Sendable {
+    case relevance = "Relevance"
+    case priceLowHigh = "Price: Low to High"
+    case priceHighLow = "Price: High to Low"
+    case ratingHighLow = "Rating: High to Low"
 
-        var id: String { rawValue }
-    }
+    var id: String { rawValue }
+}
 
-    @Published var selectedSection: SearchSection = .browse
-    @Published var query: String = ""
-    @Published var selectedTag: String? = nil
-    @Published var selectedConditions: Set<String> = []
-    @Published var onlyFavorites: Bool = false
-    @Published var minRating: Double = 0
-    @Published var sortOption: SortOption = .relevance
+struct BrowseSearchSnapshot: Sendable {
+    let products: [Product]
+    let query: String
+    let selectedTag: String?
+    let selectedConditions: Set<String>
+    let onlyFavorites: Bool
+    let minRating: Double
+    let sortOption: SearchSortOption
+    let minPrice: Int
+    let maxPrice: Int
+}
 
-    @Published var minPrice: Int = 0
-    @Published var maxPrice: Int = 0
-    @Published private(set) var recentSearches: [String] = []
-    @Published private(set) var recommendedProducts: [Product] = []
-    @Published private(set) var isLoadingRecommendations = false
+enum SearchBrowseEngine {
+    nonisolated static func filterProducts(using snapshot: BrowseSearchSnapshot) -> [Product] {
+        let trimmedQuery = snapshot.query.trimmingCharacters(in: .whitespacesAndNewlines)
 
-    @Published var products: [Product] = [] {
-        didSet {
-            if oldValue.map(\ .id) != products.map(\ .id) {
-                resetPriceRange()
-            }
-        }
-    }
-
-    private let defaults = UserDefaults.standard
-    private let recentSearchesKey = "search.recent-queries"
-    private let maxRecentSearches = 8
-
-    init() {
-        recentSearches = defaults.stringArray(forKey: recentSearchesKey) ?? []
-        resetPriceRange()
-    }
-
-    var availableTags: [String] {
-        Array(Set(products.flatMap { $0.tags })).sorted()
-    }
-
-    var availableConditions: [String] {
-        Array(Set(products.map { $0.conditionTag })).sorted()
-    }
-
-    var priceBounds: ClosedRange<Int> {
-        let prices = products.map { $0.price }
-        let min = prices.min() ?? 0
-        let max = prices.max() ?? 100
-        return min...max
-    }
-
-    var activeFilterCount: Int {
-        var count = 0
-        if selectedTag != nil { count += 1 }
-        if !selectedConditions.isEmpty { count += 1 }
-        if onlyFavorites { count += 1 }
-        if minRating > 0 { count += 1 }
-        if minPrice != priceBounds.lowerBound || maxPrice != priceBounds.upperBound { count += 1 }
-        if sortOption != .relevance { count += 1 }
-        return count
-    }
-
-    var filteredProducts: [Product] {
-        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        let filtered = products.filter { product in
+        let filtered = snapshot.products.filter { product in
             let matchesQuery: Bool
-            if q.isEmpty {
+            if trimmedQuery.isEmpty {
                 matchesQuery = true
             } else {
                 matchesQuery =
-                    product.title.localizedCaseInsensitiveContains(q) ||
-                    product.tags.contains(where: { $0.localizedCaseInsensitiveContains(q) })
+                    product.title.localizedCaseInsensitiveContains(trimmedQuery) ||
+                    product.tags.contains(where: { $0.localizedCaseInsensitiveContains(trimmedQuery) })
             }
 
-            let matchesTag = selectedTag == nil || product.tags.contains(where: {
-                $0.caseInsensitiveCompare(selectedTag ?? "") == .orderedSame
+            let matchesTag = snapshot.selectedTag == nil || product.tags.contains(where: {
+                $0.caseInsensitiveCompare(snapshot.selectedTag ?? "") == .orderedSame
             })
 
-            let matchesCondition = selectedConditions.isEmpty || selectedConditions.contains(product.conditionTag)
-            let matchesPrice = product.price >= minPrice && product.price <= maxPrice
-            let matchesFavorite = !onlyFavorites || product.isFavorite
-            let matchesRating = product.rating >= minRating
+            let matchesCondition = snapshot.selectedConditions.isEmpty || snapshot.selectedConditions.contains(product.conditionTag)
+            let matchesPrice = product.price >= snapshot.minPrice && product.price <= snapshot.maxPrice
+            let matchesFavorite = !snapshot.onlyFavorites || product.isFavorite
+            let matchesRating = product.rating >= snapshot.minRating
 
             return matchesQuery && matchesTag && matchesCondition && matchesPrice && matchesFavorite && matchesRating
         }
 
-        switch sortOption {
+        switch snapshot.sortOption {
         case .relevance:
             return filtered
         case .priceLowHigh:
@@ -120,92 +72,9 @@ final class SearchViewModel: ObservableObject {
             return filtered.sorted { $0.rating > $1.rating }
         }
     }
-
-    func toggleFavorite(for product: Product) {
-        guard let idx = products.firstIndex(where: { $0.id == product.id }) else { return }
-        products[idx].isFavorite.toggle()
-        scheduleRecommendationRefresh()
-    }
-
-    func updateProducts(_ products: [Product]) {
-        let uid = Auth.auth().currentUser?.uid
-        self.products = products.filter { $0.sellerId != uid }
-        scheduleRecommendationRefresh()
-    }
-
-    func selectTag(_ tag: String?) {
-        selectedTag = tag
-    }
-
-    func selectRecentSearch(_ search: String) {
-        query = search
-        selectedSection = .browse
-        saveRecentSearch(search)
-    }
-
-    func saveCurrentQueryIfNeeded() {
-        saveRecentSearch(query)
-    }
-
-    func toggleCondition(_ condition: String) {
-        if selectedConditions.contains(condition) {
-            selectedConditions.remove(condition)
-        } else {
-            selectedConditions.insert(condition)
-        }
-    }
-
-    func resetFilters() {
-        selectedTag = nil
-        selectedConditions.removeAll()
-        onlyFavorites = false
-        minRating = 0
-        sortOption = .relevance
-        resetPriceRange()
-    }
-
-    private func resetPriceRange() {
-        minPrice = priceBounds.lowerBound
-        maxPrice = priceBounds.upperBound
-    }
-
-    private func saveRecentSearch(_ rawQuery: String) {
-        let normalized = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalized.isEmpty else { return }
-
-        recentSearches.removeAll { $0.caseInsensitiveCompare(normalized) == .orderedSame }
-        recentSearches.insert(normalized, at: 0)
-
-        if recentSearches.count > maxRecentSearches {
-            recentSearches = Array(recentSearches.prefix(maxRecentSearches))
-        }
-
-        defaults.set(recentSearches, forKey: recentSearchesKey)
-        scheduleRecommendationRefresh()
-    }
-
-    func refreshRecommendations() async {
-        let products = self.products
-        let recentSearches = self.recentSearches
-
-        isLoadingRecommendations = true
-
-        let recommendations = await Task.detached(priority: .userInitiated) {
-            await SearchRecommendationEngine.buildRecommendations(from: products, recentSearches: recentSearches)
-        }.value
-
-        self.recommendedProducts = recommendations
-        isLoadingRecommendations = false
-    }
-
-    private func scheduleRecommendationRefresh() {
-        Task { [weak self] in
-            await self?.refreshRecommendations()
-        }
-    }
 }
 
-private enum SearchRecommendationEngine {
+enum SearchRecommendationEngine {
     struct RecommendationSignals {
         let favoriteTagWeights: [String: Int]
         let recentSearchTerms: [String]

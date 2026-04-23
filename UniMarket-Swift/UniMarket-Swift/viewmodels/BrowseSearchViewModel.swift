@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import FirebaseAuth
 
 @MainActor
@@ -37,7 +38,8 @@ final class BrowseSearchViewModel: ObservableObject {
     @Published private(set) var filteredProducts: [Product] = []
     @Published private(set) var isSearching = false
 
-    private var browseSearchTask: Task<Void, Never>?
+    private let searchQueue = DispatchQueue(label: "search.browse.queue", qos: .userInitiated)
+    private var pendingSearchWorkItem: DispatchWorkItem?
 
     var availableTags: [String] {
         Array(Set(products.flatMap { $0.tags })).sorted()
@@ -106,7 +108,11 @@ final class BrowseSearchViewModel: ObservableObject {
         query = search
     }
 
-    func refreshBrowseResults() async {
+    deinit {
+        pendingSearchWorkItem?.cancel()
+    }
+
+    func refreshBrowseResults() {
         let snapshot = BrowseSearchSnapshot(
             products: products,
             query: query,
@@ -121,14 +127,30 @@ final class BrowseSearchViewModel: ObservableObject {
 
         isSearching = true
 
-        let filteredProducts = await Task.detached(priority: .userInitiated) {
-            SearchBrowseEngine.filterProducts(using: snapshot)
-        }.value
+        pendingSearchWorkItem?.cancel()
 
-        guard !Task.isCancelled else { return }
+        var workItem: DispatchWorkItem?
+        workItem = DispatchWorkItem { [snapshot] in
+            let filteredProducts = SearchBrowseEngine.filterProducts(using: snapshot)
 
-        self.filteredProducts = filteredProducts
-        isSearching = false
+            DispatchQueue.main.async { [weak self] in
+                guard
+                    let self,
+                    let workItem,
+                    self.pendingSearchWorkItem === workItem,
+                    !workItem.isCancelled
+                else {
+                    return
+                }
+                self.filteredProducts = filteredProducts
+                self.isSearching = false
+                self.pendingSearchWorkItem = nil
+            }
+        }
+
+        guard let workItem else { return }
+        pendingSearchWorkItem = workItem
+        searchQueue.async(execute: workItem)
     }
 
     private func resetPriceRange() {
@@ -137,9 +159,6 @@ final class BrowseSearchViewModel: ObservableObject {
     }
 
     private func scheduleBrowseRefresh() {
-        browseSearchTask?.cancel()
-        browseSearchTask = Task { [weak self] in
-            await self?.refreshBrowseResults()
-        }
+        refreshBrowseResults()
     }
 }
