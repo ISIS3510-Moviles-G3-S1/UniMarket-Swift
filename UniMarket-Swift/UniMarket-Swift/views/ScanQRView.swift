@@ -9,8 +9,12 @@ import SwiftUI
 import AVFoundation
 
 struct ScanQRView: View {
-    @StateObject private var vm = ScanQRViewModel()
+    @StateObject private var vm: ScanQRViewModel
     @Environment(\.dismiss) private var dismiss
+
+    init(productID: String? = nil, source: AnalyticsSurface = .unknown) {
+        _vm = StateObject(wrappedValue: ScanQRViewModel(productID: productID, source: source))
+    }
 
     var body: some View {
         ZStack {

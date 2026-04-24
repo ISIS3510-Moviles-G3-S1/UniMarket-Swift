@@ -1,5 +1,12 @@
 import Foundation
 
+enum AnalyticsSurface: String {
+    case browseSearch = "browse_search"
+    case searchRecommendations = "search_recommendations"
+    case productDetail = "product_detail"
+    case unknown = "unknown"
+}
+
 struct AnalyticsEvent {
     let name: String
     let parameters: [String: AnalyticsValue]
@@ -166,14 +173,31 @@ extension AnalyticsEvent {
         )
     }
 
-    static func productDetailViewed(productID: String, price: Int, condition: String, isOwnListing: Bool) -> AnalyticsEvent {
+    static func productSelected(productID: String, source: String) -> AnalyticsEvent {
+        AnalyticsEvent(
+            name: "product_selected",
+            parameters: [
+                "product_id": .string(productID),
+                "source": .string(source)
+            ]
+        )
+    }
+
+    static func productDetailViewed(
+        productID: String,
+        price: Int,
+        condition: String,
+        isOwnListing: Bool,
+        source: String
+    ) -> AnalyticsEvent {
         AnalyticsEvent(
             name: "product_detail_viewed",
             parameters: [
                 "product_id": .string(productID),
                 "price": .int(price),
                 "condition": .string(condition),
-                "is_own_listing": .bool(isOwnListing)
+                "is_own_listing": .bool(isOwnListing),
+                "source": .string(source)
             ]
         )
     }
@@ -248,6 +272,17 @@ extension AnalyticsEvent {
                 "product_id": .string(productID),
                 "seller_id": .string(sellerID),
                 "price_bucket": .string(priceBucket)
+            ]
+        )
+    }
+
+    static func purchaseConfirmed(productID: String, transactionID: String, source: String) -> AnalyticsEvent {
+        AnalyticsEvent(
+            name: "purchase_confirmed",
+            parameters: [
+                "product_id": .string(productID),
+                "transaction_id": .string(transactionID),
+                "source": .string(source)
             ]
         )
     }

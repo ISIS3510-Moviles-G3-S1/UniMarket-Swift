@@ -13,7 +13,7 @@ struct SearchView: View {
     @StateObject private var browseViewModel = BrowseSearchViewModel()
     @StateObject private var recommendationsViewModel = SearchRecommendationsViewModel()
     @State private var selectedSection: SearchSection = .browse
-    @State private var selectedProduct: Product?
+    @State private var selectedProductRoute: ProductRoute?
     @State private var hasTrackedSearchView = false
     @State private var showFilters = false
 
@@ -50,13 +50,13 @@ struct SearchView: View {
                             recommendationsViewModel.saveSearch(browseViewModel.query)
                         },
                         onToggleFavorite: { product in
-                            toggleFavorite(for: product)
+                            toggleFavorite(for: product, source: .browseSearch)
                         },
                         onSelectProduct: { product in
                             if !browseViewModel.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                                 recommendationsViewModel.saveSearch(browseViewModel.query)
                             }
-                            selectedProduct = product
+                            selectProduct(product, source: .browseSearch)
                         },
                         onResetFilters: {
                             browseViewModel.resetFilters()
@@ -86,10 +86,10 @@ struct SearchView: View {
                             selectedSection = .browse
                         },
                         onToggleFavorite: { product in
-                            toggleFavorite(for: product)
+                            toggleFavorite(for: product, source: .searchRecommendations)
                         },
                         onSelectProduct: { product in
-                            selectedProduct = product
+                            selectProduct(product, source: .searchRecommendations)
                         }
                     )
                 }
@@ -100,7 +100,7 @@ struct SearchView: View {
             recommendationsViewModel.updateProducts(productStore.activeProducts)
             guard !hasTrackedSearchView else { return }
             analytics.track(.searchViewed())
-            analytics.track(.productListViewed(source: "search", resultCount: browseViewModel.filteredProducts.count))
+            analytics.track(.productListViewed(source: AnalyticsSurface.browseSearch.rawValue, resultCount: browseViewModel.filteredProducts.count))
             hasTrackedSearchView = true
         }
         .onReceive(productStore.$products) { products in
@@ -113,20 +113,61 @@ struct SearchView: View {
             analytics.track(.searchQueryChanged(length: trimmedQuery.count, hasQuery: !trimmedQuery.isEmpty))
         }
         .onChange(of: browseViewModel.filteredProducts.map(\.id)) { _, _ in
-            analytics.track(.productListViewed(source: "search", resultCount: browseViewModel.filteredProducts.count))
+            trackSearchResultsListView()
         }
-        .navigationDestination(item: $selectedProduct) { product in
-            ProductDetailView(product: product)
+        .onChange(of: selectedSection) { _, newSection in
+            guard newSection == .forYou else { return }
+            trackSearchRecommendationsListView()
+        }
+        .onChange(of: recommendationsViewModel.recommendedProducts.map(\.id)) { _, _ in
+            trackSearchRecommendationsListView()
+        }
+        .navigationDestination(item: $selectedProductRoute) { route in
+            ProductDetailView(product: route.product, source: route.source)
         }
     }
-    private func toggleFavorite(for product: Product) {
+
+    private func toggleFavorite(for product: Product, source: AnalyticsSurface) {
         productStore.toggleFavorite(for: product)
         browseViewModel.toggleFavorite(for: product)
         recommendationsViewModel.toggleFavorite(for: product)
         analytics.track(.favoriteToggled(
             productID: product.id,
             isFavorite: !product.isFavorite,
-            source: "search"
+            source: source.rawValue
         ))
+    }
+
+    private func selectProduct(_ product: Product, source: AnalyticsSurface) {
+        analytics.track(.productSelected(productID: product.id, source: source.rawValue))
+        selectedProductRoute = ProductRoute(product: product, source: source)
+    }
+
+    private func trackSearchResultsListView() {
+        analytics.track(.productListViewed(source: AnalyticsSurface.browseSearch.rawValue, resultCount: browseViewModel.filteredProducts.count))
+    }
+
+    private func trackSearchRecommendationsListView() {
+        analytics.track(.productListViewed(
+            source: AnalyticsSurface.searchRecommendations.rawValue,
+            resultCount: recommendationsViewModel.recommendedProducts.count
+        ))
+    }
+}
+
+private struct ProductRoute: Identifiable, Hashable {
+    let product: Product
+    let source: AnalyticsSurface
+
+    var id: String {
+        "\(source.rawValue)-\(product.id)"
+    }
+
+    static func == (lhs: ProductRoute, rhs: ProductRoute) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
     }
 }
