@@ -10,6 +10,9 @@ import FirebaseFirestore
 
 @MainActor
 final class ScanQRViewModel: ObservableObject {
+    private let analytics = AnalyticsService.shared
+    private let productID: String?
+    private let source: AnalyticsSurface
 
     enum ScanState {
         case scanning
@@ -20,6 +23,11 @@ final class ScanQRViewModel: ObservableObject {
     }
 
     @Published var scanState: ScanState = .scanning
+
+    init(productID: String? = nil, source: AnalyticsSurface = .unknown) {
+        self.productID = productID
+        self.source = source
+    }
 
     // MARK: - Scanner logic
 
@@ -69,6 +77,12 @@ final class ScanQRViewModel: ObservableObject {
                 "confirmedAt": FieldValue.serverTimestamp()
             ])
 
+            let resolvedProductID = (data["listingId"] as? String) ?? productID ?? "unknown"
+            analytics.track(.purchaseConfirmed(
+                productID: resolvedProductID,
+                transactionID: transactionId,
+                source: source.rawValue
+            ))
             scanState = .confirmed
         } catch {
             scanState = .error(error.localizedDescription)

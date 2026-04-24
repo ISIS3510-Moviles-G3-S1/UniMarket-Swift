@@ -22,9 +22,16 @@ struct ProductDetailView: View {
     @State private var showScanQR = false
 
     private let onProductUpdated: ((Product) -> Void)?
+    private let source: AnalyticsSurface
 
-    init(product: Product, isOwnListing: Bool = false, onProductUpdated: ((Product) -> Void)? = nil) {
+    init(
+        product: Product,
+        source: AnalyticsSurface = .unknown,
+        isOwnListing: Bool = false,
+        onProductUpdated: ((Product) -> Void)? = nil
+    ) {
         _vm = StateObject(wrappedValue: ProductDetailViewModel(product: product, isOwnListing: isOwnListing))
+        self.source = source
         self.onProductUpdated = onProductUpdated
     }
 
@@ -129,7 +136,8 @@ struct ProductDetailView: View {
                 productID: vm.id,
                 price: vm.price,
                 condition: vm.conditionText,
-                isOwnListing: vm.isOwnListing
+                isOwnListing: vm.isOwnListing,
+                source: source.rawValue
             ))
         }
         .onReceive(productStore.$products) { products in
@@ -164,7 +172,7 @@ struct ProductDetailView: View {
             }
         }
         .sheet(isPresented: $showScanQR) {
-            ScanQRView()
+            ScanQRView(productID: vm.id, source: source)
         }
         .alert("Couldn't Update Listing", isPresented: saleStateErrorBinding) {
             Button("OK", role: .cancel) {
@@ -254,7 +262,7 @@ struct ProductDetailView: View {
                     analytics.track(.favoriteToggled(
                         productID: vm.id,
                         isFavorite: nextFavoriteState,
-                        source: "product_detail"
+                        source: source == .unknown ? AnalyticsSurface.productDetail.rawValue : source.rawValue
                     ))
                 } label: {
                     HStack(spacing: 8) {
