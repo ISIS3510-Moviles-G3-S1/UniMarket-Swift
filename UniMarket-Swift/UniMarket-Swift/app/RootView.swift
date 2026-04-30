@@ -42,6 +42,7 @@ struct RootView: View {
                     authPath = []
                     // Start observing chat conversations when user logs in
                     chatStore.startObservingConversations()
+                    runPostLoginWarmup()
                 } else {
                     // Stop observing when user logs out
                     chatStore.stopObservingConversations()
@@ -68,6 +69,34 @@ struct RootView: View {
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
+    }
+
+    /// Triggers two parallel concurrency strategies right after authentication:
+    ///
+    /// 1. `LoginBootstrapper.bootstrap` — three Firestore reads (profile, saved IDs,
+    ///    last listing date) launched as `async let` and awaited as a tuple. The
+    ///    results are applied to the shared stores so the rest of the app starts
+    ///    with hot data.
+    /// 2. `ProfileInsightsPreloader.preloadAfterLogin` — `Task.detached(priority:
+    ///    .background)` warming the eco-message and impact-insight caches before
+    ///    the user ever opens the Profile tab.
+    private func runPostLoginWarmup() {
+        guard let uid = session.user?.uid else { return }
+
+        Task {
+            let result = await LoginBootstrapper.bootstrap(uid: uid)
+            if let user = result.user { session.currentUser = user }
+            productStore.applySavedItemIDs(result.savedItemIDs)
+            await ListingReminderService.shared.syncReminder(
+                for: uid,
+                lastListingDate: result.lastListingDate
+            )
+        }
+
+        ProfileInsightsPreloader.preloadAfterLogin(
+            session: session,
+            productStore: productStore
+        )
     }
 
     private func syncListingReminder(for userID: String?) {

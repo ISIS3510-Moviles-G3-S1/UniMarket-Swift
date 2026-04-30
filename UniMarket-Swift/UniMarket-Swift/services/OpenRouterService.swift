@@ -132,6 +132,95 @@ final class OpenRouterService {
         )
     }
 
+    // MARK: - Streaming variants
+    //
+    // These return an AsyncThrowingStream that yields token deltas as they arrive
+    // from OpenRouter's SSE endpoint. The network read happens off the main actor
+    // (URLSession.bytes), and the consumer (ProfileViewModel @MainActor) appends
+    // each chunk to a @Published property — so the user sees the response type out
+    // word-by-word instead of waiting for the full payload (~3-5s) to land at once.
+
+    func streamEcoRecommendation(prompt: String) -> AsyncThrowingStream<String, Error> {
+        let system = "You are Eco, a friendly and motivational sustainability companion inside UniMarket, a student marketplace app for clothing only. Your job is to celebrate the user's progress and give them one specific, encouraging nudge based on their stats. Tone: warm, upbeat, like a supportive friend — never preachy or generic. Always address the user by name. Reference their actual numbers (XP, transactions, listings sold) to make it feel personal. Max 240 characters total."
+        return makeStream(systemPrompt: system, userPrompt: prompt)
+    }
+
+    func streamImpactInsight(prompt: String) -> AsyncThrowingStream<String, Error> {
+        let system = """
+        You are Eco, UniMarket's sustainability analyst. You turn a student's real reuse numbers into one sharp, data-grounded insight \
+        that feels personal. Follow these rules strictly:
+        1. Open with ONE vivid, concrete comparison tied to the biggest number (showers of water, km of driving avoided, or tree-years of CO2).
+        2. Call out the user's STRONGEST category by name and why it over-indexes (e.g., "your jackets alone carry most of that water saving").
+        3. End with ONE specific, non-generic next action tied to what they already do well.
+        Rules: warm, direct tone. No emojis. No hashtags. No preachy climate platitudes. No round-number invention — use only the numbers \
+        provided. Maximum 3 short sentences, 320 characters total.
+        """
+        return makeStream(systemPrompt: system, userPrompt: prompt)
+    }
+
+    private func makeStream(systemPrompt: String, userPrompt: String) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    guard APIConfig.isOpenRouterConfigured() else {
+                        throw OpenRouterError.missingAPIKey
+                    }
+                    guard let url = URL(string: APIConfig.openRouterBaseURL) else {
+                        throw OpenRouterError.invalidURL
+                    }
+
+                    var request = URLRequest(url: url, timeoutInterval: APIConfig.requestTimeout)
+                    request.httpMethod = "POST"
+                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+                    request.setValue("Bearer \(APIConfig.openRouterAPIKey)", forHTTPHeaderField: "Authorization")
+
+                    if !APIConfig.openRouterReferer.isEmpty {
+                        request.setValue(APIConfig.openRouterReferer, forHTTPHeaderField: "HTTP-Referer")
+                    }
+                    if !APIConfig.openRouterTitle.isEmpty {
+                        request.setValue(APIConfig.openRouterTitle, forHTTPHeaderField: "X-OpenRouter-Title")
+                    }
+
+                    let body = ORStreamRequest(
+                        model: APIConfig.openRouterModel,
+                        stream: true,
+                        messages: [
+                            ORChatMessage(role: "system", content: systemPrompt),
+                            ORChatMessage(role: "user", content: userPrompt)
+                        ]
+                    )
+                    request.httpBody = try JSONEncoder().encode(body)
+
+                    let (bytes, response) = try await URLSession.shared.bytes(for: request)
+                    guard let http = response as? HTTPURLResponse else {
+                        throw OpenRouterError.invalidResponse
+                    }
+                    guard (200...299).contains(http.statusCode) else {
+                        throw OpenRouterError.server(statusCode: http.statusCode, message: nil)
+                    }
+
+                    for try await line in bytes.lines {
+                        if Task.isCancelled { break }
+                        guard line.hasPrefix("data: ") else { continue }
+                        let payload = String(line.dropFirst(6))
+                        if payload == "[DONE]" { break }
+                        guard let data = payload.data(using: .utf8) else { continue }
+                        if let chunk = try? JSONDecoder().decode(ORStreamChunk.self, from: data),
+                           let delta = chunk.choices.first?.delta.content,
+                           !delta.isEmpty {
+                            continuation.yield(delta)
+                        }
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
     func generateStylistReply(prompt: String, catalog: [Product], photoContext: String? = nil) async throws -> String {
         guard APIConfig.isOpenRouterConfigured() else {
             throw OpenRouterError.missingAPIKey
@@ -209,6 +298,24 @@ final class OpenRouterService {
 private struct ORChatRequest: Encodable {
     let model: String
     let messages: [ORChatMessage]
+}
+
+private struct ORStreamRequest: Encodable {
+    let model: String
+    let stream: Bool
+    let messages: [ORChatMessage]
+}
+
+private struct ORStreamChunk: Decodable {
+    let choices: [Choice]
+
+    struct Choice: Decodable {
+        let delta: Delta
+    }
+
+    struct Delta: Decodable {
+        let content: String?
+    }
 }
 
 private struct ORChatMessage: Codable {

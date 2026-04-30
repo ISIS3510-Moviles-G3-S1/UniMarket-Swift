@@ -58,16 +58,26 @@ final class ProductService {
         let document = db.collection(collectionName).document()
         let realListingID = document.documentID
 
-        // 2. Upload images using the real listing ID
-        var imageURLs: [String] = []
-        for (index, imageData) in input.imagesData.enumerated() {
-            guard let uiImage = UIImage(data: imageData) else { continue }
-            let url = try await ImageUploadService.uploadListingImage(
-                uiImage,
-                listingId: realListingID,
-                index: index
-            )
-            imageURLs.append(url)
+        // 2. Upload images concurrently using the real listing ID. Each image becomes
+        //    its own child Task so all uploads run in parallel; we tag each result
+        //    with its original index and re-sort to preserve the user's chosen order.
+        let imageURLs: [String] = try await withThrowingTaskGroup(of: (Int, String).self) { group in
+            for (index, imageData) in input.imagesData.enumerated() {
+                guard let uiImage = UIImage(data: imageData) else { continue }
+                group.addTask {
+                    let url = try await ImageUploadService.uploadListingImage(
+                        uiImage,
+                        listingId: realListingID,
+                        index: index
+                    )
+                    return (index, url)
+                }
+            }
+            var results: [(Int, String)] = []
+            for try await pair in group {
+                results.append(pair)
+            }
+            return results.sorted { $0.0 < $1.0 }.map(\.1)
         }
 
         // 3. Write Firestore document with the correct image URLs
@@ -143,15 +153,19 @@ final class ProductService {
     }
 
     func deleteProduct(_ product: Product) async throws {
-        // Delete all images from Storage
-        for rawValue in product.imageURLs {
-            let candidate = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !candidate.isEmpty else { continue }
-
-            do {
-                let ref = try storageReference(from: candidate)
-                try await ref.delete()
-            } catch { }
+        // Delete all images from Storage concurrently. Individual failures are swallowed
+        // (orphaned blobs are tolerable) so one bad URL doesn't block the others.
+        await withTaskGroup(of: Void.self) { group in
+            for rawValue in product.imageURLs {
+                let candidate = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !candidate.isEmpty else { continue }
+                group.addTask { [self] in
+                    do {
+                        let ref = try storageReference(from: candidate)
+                        try await ref.delete()
+                    } catch { }
+                }
+            }
         }
 
         // Delete Firestore document
@@ -216,7 +230,7 @@ final class ProductService {
         }
     }
 
-    private func storageReference(from downloadURL: String) throws -> StorageReference {
+    nonisolated private func storageReference(from downloadURL: String) throws -> StorageReference {
         guard
             let url = URL(string: downloadURL),
             let encodedPath = url.pathComponents

@@ -106,6 +106,13 @@ final class ProductStore: ObservableObject {
         } catch { }
     }
 
+    /// Applies pre-fetched saved item IDs (typically from LoginBootstrapper) so
+    /// the favorites state lights up without a second Firestore round-trip.
+    func applySavedItemIDs(_ ids: [String]) {
+        savedProductIDs = Set(ids)
+        applySavedState()
+    }
+
     private func applySavedState() {
         for index in products.indices {
             products[index].isFavorite = savedProductIDs.contains(products[index].id)
