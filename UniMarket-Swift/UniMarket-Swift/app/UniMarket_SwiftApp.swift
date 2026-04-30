@@ -52,6 +52,12 @@ struct UniMarket_SwiftApp: App {
                 .environmentObject(productStore)
                 .task {
                     productStore.prefetchImages(for: productStore.activeProducts)
+                    // Bind the pending-listings syncer once. It subscribes to
+                    // NetworkMonitor.shared and drains the on-disk queue every
+                    // time connectivity comes back. Also resume anything left
+                    // queued from a previous session.
+                    PendingListingsSyncer.shared.bind(to: NetworkMonitor.shared)
+                    await PendingListingsSyncer.shared.resumeIfNeeded()
                 }
                 .tint(AppTheme.accent)
                 .font(.poppinsRegular(16))

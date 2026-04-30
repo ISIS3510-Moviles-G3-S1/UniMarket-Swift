@@ -4,6 +4,8 @@ import Combine
 
 @MainActor
 final class NetworkMonitor: ObservableObject {
+    static let shared = NetworkMonitor()
+
     @Published private(set) var isConnected = true
 
     private let monitor = NWPathMonitor()

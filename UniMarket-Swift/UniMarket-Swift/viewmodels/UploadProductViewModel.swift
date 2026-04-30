@@ -1,10 +1,17 @@
 import SwiftUI
 import PhotosUI
 import Combine
+import FirebaseAuth
 
 #if canImport(UIKit)
 import UIKit
 #endif
+
+enum PostOutcome {
+    case published
+    case queued
+    case failed
+}
 
 final class UploadProductViewModel: ObservableObject {
     private let analytics = AnalyticsService.shared
@@ -22,6 +29,7 @@ final class UploadProductViewModel: ObservableObject {
 
     @Published var isPosting: Bool = false
     @Published var errorMessage: String? = nil
+    @Published var infoMessage: String? = nil
 
     func applyAIDraft(_ draft: AIListingDraft, image: UIImage?) {
         if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -96,8 +104,8 @@ final class UploadProductViewModel: ObservableObject {
         Int(price) != nil
     }
 
-    func postProduct(using productStore: ProductStore) async -> Bool {
-        guard canPost, let parsedPrice = Int(price) else { return false }
+    func postProduct(using productStore: ProductStore) async -> PostOutcome {
+        guard canPost, let parsedPrice = Int(price) else { return .failed }
         analytics.track(.listingSubmitAttempt(
             photoCount: imagesData.count,
             hasDescription: !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
@@ -108,31 +116,71 @@ final class UploadProductViewModel: ObservableObject {
         await MainActor.run {
             isPosting = true
             errorMessage = nil
+            infoMessage = nil
         }
 
         defer {
             Task { @MainActor in self.isPosting = false }
         }
 
-        do {
-            let input = CreateProductInput(
-                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-                price: parsedPrice,
-                conditionTag: condition,
-                description: description.trimmingCharacters(in: .whitespacesAndNewlines),
-                imagesData: imagesData,
-                tags: selectedTags
-            )
+        let input = CreateProductInput(
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            price: parsedPrice,
+            conditionTag: condition,
+            description: description.trimmingCharacters(in: .whitespacesAndNewlines),
+            imagesData: imagesData,
+            tags: selectedTags
+        )
 
+        // Offline up front: skip the network attempt, enqueue to disk, surface
+        // a "will publish when you're back online" message.
+        let isConnected = await MainActor.run { NetworkMonitor.shared.isConnected }
+        if !isConnected, let uid = Auth.auth().currentUser?.uid {
+            await PendingListingsSyncer.shared.enqueue(input: input, userID: uid)
+            analytics.track(.listingSubmitFailed(reason: "queued_offline"))
+            await MainActor.run {
+                infoMessage = "You're offline — we saved your listing and will publish it as soon as you're back online."
+                resetForm()
+            }
+            return .queued
+        }
+
+        do {
             let product = try await productStore.createProduct(input: input)
             await ListingReminderService.shared.recordListing(for: product.sellerId, at: product.createdAt)
             await MainActor.run { resetForm() }
-            return true
+            return .published
         } catch {
+            // Live attempt failed mid-flight. If the failure looks network-shaped
+            // (offline / Storage upload error) fall back to the queue so the user
+            // doesn't lose their work.
+            if Self.isLikelyNetworkError(error), let uid = Auth.auth().currentUser?.uid {
+                await PendingListingsSyncer.shared.enqueue(input: input, userID: uid)
+                analytics.track(.listingSubmitFailed(reason: "queued_after_network_error"))
+                await MainActor.run {
+                    infoMessage = "We couldn't reach the server — your listing is saved and we'll retry when you're back online."
+                    resetForm()
+                }
+                return .queued
+            }
             analytics.track(.listingSubmitFailed(reason: error.localizedDescription))
             await MainActor.run { errorMessage = error.localizedDescription }
-            return false
+            return .failed
         }
+    }
+
+    private static func isLikelyNetworkError(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain { return true }
+        let networkCodes: Set<Int> = [
+            NSURLErrorNotConnectedToInternet,
+            NSURLErrorTimedOut,
+            NSURLErrorNetworkConnectionLost,
+            NSURLErrorCannotFindHost,
+            NSURLErrorCannotConnectToHost,
+            NSURLErrorDataNotAllowed
+        ]
+        return networkCodes.contains(nsError.code)
     }
 
     @MainActor
@@ -148,6 +196,8 @@ final class UploadProductViewModel: ObservableObject {
         tagSearchText = ""
         customTagInput = ""
         errorMessage = nil
+        // Note: we deliberately don't clear infoMessage here — the post-publish
+        // confirmation is shown by the upload view based on the PostOutcome.
     }
 
     var normalizedCustomTag: String {

@@ -20,6 +20,7 @@ struct MainTabView: View {
     @State private var showUpload = false
     @State private var tabBarHidden = false
     @StateObject private var profileViewModel = ProfileViewModel()
+    @ObservedObject private var pendingSyncer = PendingListingsSyncer.shared
 
     private let barHeight: CGFloat = 64
     private let sidePadding: CGFloat = 16
@@ -30,6 +31,13 @@ struct MainTabView: View {
             ZStack {
                 tabContent
                     .frame(width: proxy.size.width, height: proxy.size.height)
+
+                if pendingSyncer.pendingCount > 0 {
+                    pendingListingsBanner
+                        .frame(width: proxy.size.width - (sidePadding * 2))
+                        .position(x: proxy.size.width / 2, y: 44)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
 
                 if !tabBarHidden {
                     CustomTabBar(
@@ -63,6 +71,33 @@ struct MainTabView: View {
             }
         }
         .environment(\.hideTabBar, $tabBarHidden)
+    }
+
+    private var pendingListingsBanner: some View {
+        let count = pendingSyncer.pendingCount
+        let label: String = {
+            if pendingSyncer.isDraining {
+                return "Publishing \(count) queued listing\(count == 1 ? "" : "s")…"
+            }
+            return "\(count) listing\(count == 1 ? "" : "s") waiting for connectivity"
+        }()
+        return HStack(spacing: 10) {
+            if pendingSyncer.isDraining {
+                ProgressView()
+                    .tint(AppTheme.primaryText)
+            } else {
+                Image(systemName: "wifi.exclamationmark")
+                    .foregroundStyle(AppTheme.primaryText)
+            }
+            Text(label)
+                .font(.poppinsRegular(13))
+                .foregroundStyle(AppTheme.primaryText)
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(AppTheme.accentAlt.opacity(0.85))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     @ViewBuilder

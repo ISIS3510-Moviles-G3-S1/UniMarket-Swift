@@ -78,6 +78,22 @@ final class ChatStore: ObservableObject {
         guard let uid = Auth.auth().currentUser?.uid else { return }
         isLoading = true
 
+        // Hydrate from SwiftData first so the inbox renders the last-known
+        // conversations + cached otherParticipantName/avatar instantly, before
+        // Firestore replies. The Firestore snapshot below will replace this.
+        let cached = ChatLocalStore.shared.loadAllConversations()
+        if !cached.isEmpty {
+            self.conversations = cached
+            // Also hydrate per-conversation message threads so opening a chat
+            // shows history immediately on cold launch.
+            for conv in cached {
+                let cachedMessages = ChatLocalStore.shared.loadMessages(for: conv.id)
+                if !cachedMessages.isEmpty {
+                    self.messagesByConversation[conv.id] = cachedMessages
+                }
+            }
+        }
+
         conversationListener = db.collection("conversations")
             .whereField("participants", arrayContains: uid)
             .addSnapshotListener { [weak self] snapshot, error in
@@ -92,13 +108,21 @@ final class ChatStore: ObservableObject {
                     for doc in snapshot.documents {
                         if let conv = await self.parseConversation(doc: doc, currentUID: uid) {
                             updated.append(conv)
+                            // Mirror to SwiftData. otherParticipantName/avatar are
+                            // resolved by parseConversation via a users collection
+                            // read — caching them here removes that round-trip on
+                            // every cold launch.
+                            ChatLocalStore.shared.upsertConversation(conv)
                         }
                     }
                     self.conversations = updated.sorted {
                         ($0.lastMessageAt ?? .distantPast) > ($1.lastMessageAt ?? .distantPast)
                     }
+                    // Drop any locally-cached conversations the user is no longer
+                    // a participant in.
+                    ChatLocalStore.shared.removeConversations(notIn: Set(updated.map(\.id)))
                     self.isLoading = false
-                    
+
                     // Start listening to all conversations for unread count updates
                     self.startListeningToAllConversationsForUnreadCounts(uid: uid)
                 }
@@ -134,6 +158,11 @@ final class ChatStore: ObservableObject {
                     guard let self else { return }
                     let messages = snapshot.documents.compactMap { self.parseMessage(doc: $0) }
                     self.messagesByConversation[conversationID] = messages
+
+                    // Mirror the full message thread to SwiftData. replaceMessages
+                    // upserts existing rows by id and deletes any that are no longer
+                    // present in the Firestore snapshot.
+                    ChatLocalStore.shared.replaceMessages(messages, for: conversationID)
 
                     // Update unread count on the conversation object
                     if let idx = self.conversations.firstIndex(where: { $0.id == conversationID }) {

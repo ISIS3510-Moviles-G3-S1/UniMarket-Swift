@@ -85,11 +85,20 @@ struct UploadProductView: View {
                             .font(.poppinsRegular(12))
                     }
 
+                    if let info = vm.infoMessage {
+                        Text(info)
+                            .foregroundStyle(AppTheme.accentAlt)
+                            .font(.poppinsRegular(12))
+                    }
+
                     Button {
                         Task {
-                            let didPublish = await vm.postProduct(using: productStore)
-                            if didPublish {
+                            let outcome = await vm.postProduct(using: productStore)
+                            switch outcome {
+                            case .published, .queued:
                                 dismiss()
+                            case .failed:
+                                break
                             }
                         }
                     } label: {
