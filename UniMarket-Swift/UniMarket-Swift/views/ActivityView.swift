@@ -12,6 +12,7 @@ struct ActivityView: View {
     @EnvironmentObject private var productStore: ProductStore
     @EnvironmentObject private var session: SessionManager
     @StateObject private var vm = ActivityViewModel()
+    @ObservedObject private var pendingFavorites = PendingFavoritesSyncer.shared
     @State private var selectedListing: Product?
     @State private var selectedLikedProduct: Product?
     @State private var listingPendingDelete: Product?
@@ -102,6 +103,17 @@ struct ActivityView: View {
 
     private var likesSection: some View {
         VStack(spacing: 12) {
+            if pendingFavorites.pendingCount > 0 {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("\(pendingFavorites.pendingCount) favorite\(pendingFavorites.pendingCount == 1 ? "" : "s") syncing")
+                        .font(.poppinsRegular(11))
+                }
+                .foregroundStyle(AppTheme.secondaryText)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
             if vm.likedProducts.isEmpty {
                 Text("No saved items yet.")
                     .font(.poppinsRegular(14))
@@ -150,8 +162,16 @@ struct ActivityView: View {
                                 vm.removeSavedProduct(product)
                                 productStore.toggleFavorite(for: product)
                             } label: {
-                                Image(systemName: "heart.fill")
-                                    .foregroundStyle(AppTheme.accent)
+                                ZStack(alignment: .topTrailing) {
+                                    Image(systemName: "heart.fill")
+                                        .foregroundStyle(AppTheme.accent)
+                                    if pendingFavorites.isPending(product.id) {
+                                        Image(systemName: "clock.fill")
+                                            .font(.system(size: 8))
+                                            .foregroundStyle(AppTheme.secondaryText)
+                                            .offset(x: 4, y: -4)
+                                    }
+                                }
                             }
                             .buttonStyle(.plain)
                         }

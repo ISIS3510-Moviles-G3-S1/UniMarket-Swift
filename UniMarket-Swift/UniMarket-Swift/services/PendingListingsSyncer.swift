@@ -29,6 +29,7 @@ final class PendingListingsSyncer: ObservableObject {
     @Published private(set) var isDraining: Bool = false
 
     private var connectivityCancellable: AnyCancellable?
+    private var sessionCancellable: AnyCancellable?
 
     private init() {}
 
@@ -40,6 +41,15 @@ final class PendingListingsSyncer: ObservableObject {
                 if connected {
                     Task { await self.drain() }
                 }
+            }
+        // Refresh count whenever the signed-in user changes so the banner stays
+        // accurate after sign-out or account switching without a connectivity flip.
+        sessionCancellable = SessionManager.shared.$user
+            .map { $0?.uid }
+            .removeDuplicates()
+            .sink { [weak self] _ in
+                guard let self else { return }
+                Task { await self.refreshCount() }
             }
         Task { await refreshCount() }
     }

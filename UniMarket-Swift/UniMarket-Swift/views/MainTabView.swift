@@ -20,7 +20,10 @@ struct MainTabView: View {
     @State private var showUpload = false
     @State private var tabBarHidden = false
     @StateObject private var profileViewModel = ProfileViewModel()
-    @ObservedObject private var pendingSyncer = PendingListingsSyncer.shared
+    @ObservedObject private var pendingListings = PendingListingsSyncer.shared
+    @ObservedObject private var pendingMessages = PendingChatMessagesSyncer.shared
+    @ObservedObject private var pendingFavorites = PendingFavoritesSyncer.shared
+    @ObservedObject private var pendingMutations = PendingListingMutationsSyncer.shared
 
     private let barHeight: CGFloat = 64
     private let sidePadding: CGFloat = 16
@@ -32,7 +35,7 @@ struct MainTabView: View {
                 tabContent
                     .frame(width: proxy.size.width, height: proxy.size.height)
 
-                if pendingSyncer.pendingCount > 0 {
+                if totalPendingCount > 0 {
                     pendingListingsBanner
                         .frame(width: proxy.size.width - (sidePadding * 2))
                         .position(x: proxy.size.width / 2, y: 44)
@@ -73,16 +76,24 @@ struct MainTabView: View {
         .environment(\.hideTabBar, $tabBarHidden)
     }
 
+    private var totalPendingCount: Int {
+        pendingListings.pendingCount
+            + pendingMessages.pendingCount
+            + pendingFavorites.pendingCount
+            + pendingMutations.pendingCount
+    }
+
+    private var anyDraining: Bool {
+        pendingListings.isDraining
+            || pendingMessages.isDraining
+            || pendingFavorites.isDraining
+            || pendingMutations.isDraining
+    }
+
     private var pendingListingsBanner: some View {
-        let count = pendingSyncer.pendingCount
-        let label: String = {
-            if pendingSyncer.isDraining {
-                return "Publishing \(count) queued listing\(count == 1 ? "" : "s")…"
-            }
-            return "\(count) listing\(count == 1 ? "" : "s") waiting for connectivity"
-        }()
+        let label = bannerLabel
         return HStack(spacing: 10) {
-            if pendingSyncer.isDraining {
+            if anyDraining {
                 ProgressView()
                     .tint(AppTheme.primaryText)
             } else {
@@ -98,6 +109,33 @@ struct MainTabView: View {
         .padding(.vertical, 10)
         .background(AppTheme.accentAlt.opacity(0.85))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    /// Builds the banner copy. When a single queue type is active, the banner
+    /// names that type ("3 messages waiting for connectivity"). When multiple
+    /// queue types have records, it falls back to a generic count
+    /// ("4 changes waiting for connectivity") so the banner doesn't try to
+    /// enumerate every category.
+    private var bannerLabel: String {
+        let parts: [(Int, String)] = [
+            (pendingListings.pendingCount, "listing"),
+            (pendingMessages.pendingCount, "message"),
+            (pendingFavorites.pendingCount, "favorite"),
+            (pendingMutations.pendingCount, "edit")
+        ].filter { $0.0 > 0 }
+
+        let total = totalPendingCount
+        if parts.count == 1, let only = parts.first {
+            let noun = only.1 + (only.0 == 1 ? "" : "s")
+            if anyDraining {
+                return "Syncing \(only.0) \(noun)…"
+            }
+            return "\(only.0) \(noun) waiting for connectivity"
+        }
+        if anyDraining {
+            return "Syncing \(total) change\(total == 1 ? "" : "s")…"
+        }
+        return "\(total) change\(total == 1 ? "" : "s") waiting for connectivity"
     }
 
     @ViewBuilder

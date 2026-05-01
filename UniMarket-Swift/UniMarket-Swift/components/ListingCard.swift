@@ -11,6 +11,7 @@ struct ListingCard: View {
     let product: Product
     let onDelete: () -> Void
     let onTapDetail: () -> Void
+    @ObservedObject private var pendingMutations = PendingListingMutationsSyncer.shared
 
     private var carouselImageURLs: [String] {
         let urls = product.imageURLs
@@ -42,6 +43,22 @@ struct ListingCard: View {
                             .background(badgeColor(product.status).opacity(0.35))
                             .clipShape(Capsule())
                             .padding(10)
+
+                        if pendingMutations.isPending(product.id) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "clock.fill")
+                                    .font(.system(size: 9, weight: .semibold))
+                                Text("Pending sync")
+                                    .font(.poppinsSemiBold(10))
+                            }
+                            .foregroundStyle(AppTheme.primaryText)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(AppTheme.accentAlt.opacity(0.85))
+                            .clipShape(Capsule())
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                        }
                     }
 
                     Text(product.title)

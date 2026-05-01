@@ -37,10 +37,28 @@ struct CachedRemoteImageView: View {
     }
 
     private var placeholderView: some View {
-        Image(systemName: placeholderStyle.systemName)
-            .resizable()
-            .scaledToFit()
-            .foregroundStyle(Color.gray)
+        GeometryReader { geo in
+            // Compute a symbol size relative to the parent container so it scales across cards
+            let minSide = min(geo.size.width, geo.size.height)
+            let scale: CGFloat = (placeholderStyle == .profile) ? 0.45 : 0.28
+            let computedSize = max(24, minSide * scale)
+
+            ZStack {
+                // subtle background behind the symbol to improve contrast
+                RoundedRectangle(cornerRadius: computedSize * 0.35)
+                    .fill(Color.gray.opacity(0.12))
+                    .frame(width: computedSize * 1.6, height: computedSize * 1.6)
+
+                Image(systemName: placeholderStyle.systemName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: computedSize, height: computedSize)
+                    .foregroundStyle(Color.gray)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        }
+        // Give GeometryReader a flexible size so outer frames (cards) control layout
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     var body: some View {

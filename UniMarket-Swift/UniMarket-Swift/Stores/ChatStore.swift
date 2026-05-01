@@ -16,6 +16,10 @@ struct ChatMessage: Identifiable, Hashable {
     var readAt: Date?
     let replyTo: ReplySnapshot?
     let listingSnapshot: ListingSnapshot?
+    /// Delivery state for the chat outbox. Defaults to `.delivered` for any
+    /// message that originated from a Firestore snapshot. Local-only optimistic
+    /// bubbles use `.pending` while they sit in PendingChatMessagesStore.
+    var deliveryState: DeliveryState = .delivered
 
     var isFromCurrentUser: Bool {
         senderId == Auth.auth().currentUser?.uid
@@ -23,6 +27,11 @@ struct ChatMessage: Identifiable, Hashable {
 
     enum MessageType: String {
         case text, image, listing
+    }
+
+    enum DeliveryState: Hashable {
+        case delivered
+        case pending
     }
 
     struct ReplySnapshot: Hashable {
@@ -352,6 +361,35 @@ final class ChatStore: ObservableObject {
         let msgRef = db.collection("conversations").document(conversationID)
             .collection("messages").document()
 
+        // Offline path: enqueue to PendingChatMessagesStore and append a
+        // `.pending` optimistic bubble. The Firestore listener will replace it
+        // with a `.delivered` server-side message once the syncer drains.
+        if !NetworkMonitor.shared.isConnected {
+            await PendingChatMessagesSyncer.shared.enqueue(
+                userID: uid,
+                conversationID: conversationID,
+                messageID: msgRef.documentID,
+                text: trimmed,
+                replyTo: replyTo
+            )
+            let pending = ChatMessage(
+                id: msgRef.documentID,
+                senderId: uid,
+                text: trimmed,
+                imageURLs: [],
+                type: .text,
+                sentAt: Date(),
+                readAt: nil,
+                replyTo: replyTo,
+                listingSnapshot: nil,
+                deliveryState: .pending
+            )
+            var current = messagesByConversation[conversationID] ?? []
+            current.append(pending)
+            messagesByConversation[conversationID] = current
+            return
+        }
+
         // Optimistic local update — message appears in the UI immediately.
         let optimistic = ChatMessage(
             id: msgRef.documentID,
@@ -386,11 +424,47 @@ final class ChatStore: ObservableObject {
         }
 
         // write message, then update conversation summary
-        try await msgRef.setData(msgData)
-        try await db.collection("conversations").document(conversationID).updateData([
-            "lastMessageText": trimmed,
-            "lastMessageAt": FieldValue.serverTimestamp()
-        ])
+        do {
+            try await msgRef.setData(msgData)
+            try await db.collection("conversations").document(conversationID).updateData([
+                "lastMessageText": trimmed,
+                "lastMessageAt": FieldValue.serverTimestamp()
+            ])
+        } catch {
+            // The send started online but the network dropped mid-flight (or
+            // Firestore returned a transient error). Convert the optimistic
+            // bubble into a queued one and hand the syncer the same messageID
+            // so the eventual listener replacement still de-dupes correctly.
+            if Self.isLikelyNetworkError(error) {
+                await PendingChatMessagesSyncer.shared.enqueue(
+                    userID: uid,
+                    conversationID: conversationID,
+                    messageID: msgRef.documentID,
+                    text: trimmed,
+                    replyTo: replyTo
+                )
+                if var msgs = messagesByConversation[conversationID],
+                   let idx = msgs.firstIndex(where: { $0.id == msgRef.documentID }) {
+                    msgs[idx].deliveryState = .pending
+                    messagesByConversation[conversationID] = msgs
+                }
+                return
+            }
+            throw error
+        }
+    }
+
+    private static func isLikelyNetworkError(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain { return true }
+        let networkCodes: Set<Int> = [
+            NSURLErrorNotConnectedToInternet,
+            NSURLErrorTimedOut,
+            NSURLErrorNetworkConnectionLost,
+            NSURLErrorCannotConnectToHost,
+            NSURLErrorCannotFindHost
+        ]
+        return networkCodes.contains(nsError.code)
     }
 
     // MARK: - Send an image message

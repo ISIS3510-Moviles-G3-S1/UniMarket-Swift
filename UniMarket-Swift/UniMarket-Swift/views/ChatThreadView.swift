@@ -5,6 +5,7 @@ import PhotosUI
 struct ChatThreadView: View {
     @EnvironmentObject private var chatStore: ChatStore
     @Environment(\.hideTabBar) private var hideTabBar
+    @ObservedObject private var pendingMessages = PendingChatMessagesSyncer.shared
 
     let conversationID: String
 
@@ -16,7 +17,38 @@ struct ChatThreadView: View {
     @State private var replyingTo: ChatMessage.ReplySnapshot? = nil
 
     private var messages: [ChatMessage] {
-        chatStore.messagesByConversation[conversationID] ?? []
+        let live = chatStore.messagesByConversation[conversationID] ?? []
+        // Merge in any disk-persisted pending records that aren't already
+        // represented in the in-memory thread (cold launch case where
+        // messagesByConversation hydrates from SwiftData and doesn't contain
+        // the optimistic pending bubble that was appended in a prior session).
+        let queued = pendingMessages.pendingByConversation[conversationID] ?? []
+        guard !queued.isEmpty else { return live }
+        let liveIDs = Set(live.map(\.id))
+        let extras: [ChatMessage] = queued
+            .filter { !liveIDs.contains($0.messageID) }
+            .map { record in
+                let reply: ChatMessage.ReplySnapshot? = record.replyToMessageID.map { mid in
+                    ChatMessage.ReplySnapshot(
+                        messageId: mid,
+                        senderId: record.replyToSenderID ?? "",
+                        textPreview: record.replyToTextPreview ?? ""
+                    )
+                }
+                return ChatMessage(
+                    id: record.messageID,
+                    senderId: record.userID,
+                    text: record.text,
+                    imageURLs: [],
+                    type: .text,
+                    sentAt: record.queuedAt,
+                    readAt: nil,
+                    replyTo: reply,
+                    listingSnapshot: nil,
+                    deliveryState: .pending
+                )
+            }
+        return (live + extras).sorted { $0.sentAt < $1.sentAt }
     }
 
     private var conversation: ChatConversation? {
@@ -359,13 +391,21 @@ private struct MessageBubble: View {
                         .foregroundStyle(AppTheme.secondaryText)
 
                     if message.isFromCurrentUser {
-                        Image(systemName: message.readAt != nil ? "checkmark.circle.fill" : "checkmark.circle")
-                            .font(.system(size: 10))
-                            .foregroundStyle(
-                                message.readAt != nil
-                                    ? AppTheme.accent
-                                    : AppTheme.secondaryText
-                            )
+                        if message.deliveryState == .pending {
+                            // Outbox state — the message is on disk waiting for
+                            // connectivity. Mirrors WhatsApp's single-clock affordance.
+                            Image(systemName: "clock")
+                                .font(.system(size: 10))
+                                .foregroundStyle(AppTheme.secondaryText)
+                        } else {
+                            Image(systemName: message.readAt != nil ? "checkmark.circle.fill" : "checkmark.circle")
+                                .font(.system(size: 10))
+                                .foregroundStyle(
+                                    message.readAt != nil
+                                        ? AppTheme.accent
+                                        : AppTheme.secondaryText
+                                )
+                        }
                     }
                 }
             }

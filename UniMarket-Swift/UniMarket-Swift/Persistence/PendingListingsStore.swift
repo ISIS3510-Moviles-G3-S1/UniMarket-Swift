@@ -111,6 +111,24 @@ final class PendingListingsStore {
         try writeIndex(index, in: dir)
     }
 
+    /// Removes the entire per-user queue directory, including all pending records
+    /// and their JPEG sidecar files. Called at sign-out to prevent stale data
+    /// accumulating for accounts that won't return on this device.
+    func clearUserQueue(for userID: String) throws {
+        let support = try fileManager.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: false
+        )
+        let dir = support
+            .appendingPathComponent("UniMarket-Swift", isDirectory: true)
+            .appendingPathComponent("PendingListings", isDirectory: true)
+            .appendingPathComponent(sanitizedFilename(userID), isDirectory: true)
+        guard fileManager.fileExists(atPath: dir.path) else { return }
+        try fileManager.removeItem(at: dir)
+    }
+
     func bumpRetry(pendingID: String, userID: String, error: Error) throws {
         let dir = try userDirectory(for: userID)
         var index = (try? readIndex(in: dir)) ?? []
