@@ -1,15 +1,7 @@
 import Foundation
 
-// Persistent record of a seller-side mutation to one of their own listings
-// (price/title/status edit, mark-as-sold toggle, or full delete) that
-// happened while offline. Stored on disk under
-//   ~/Library/Application Support/UniMarket-Swift/PendingMutations/{userID}/
-// as one JSON file plus an index.json with the ordered list.
-//
-// Mutations are coalesced per-listing — only the most recent .update for a
-// given listing is retained, since a sequence of edits is functionally
-// equivalent to the last one. A .delete subsumes any earlier .update for the
-// same listing.
+// Seller-side update/delete on the seller's own listing, queued while
+// offline. Coalesced per productID — see EvCon.md §4 for the merge rules.
 struct PendingListingMutation: Codable, Equatable, Identifiable {
     var id: String { pendingID }
 
@@ -18,9 +10,7 @@ struct PendingListingMutation: Codable, Equatable, Identifiable {
         case delete
     }
 
-    /// Snapshot of the mutated fields. For .update we replay updateProduct
-    /// with this snapshot; for .delete we just need productID + imageURLs so
-    /// the syncer can clean up the Storage blobs.
+    /// Mutable fields needed to replay updateProduct/deleteProduct.
     struct Snapshot: Codable, Equatable {
         var title: String
         var price: Int

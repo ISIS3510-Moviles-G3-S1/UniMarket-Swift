@@ -52,10 +52,8 @@ struct UniMarket_SwiftApp: App {
                 .environmentObject(productStore)
                 .task {
                     productStore.prefetchImages(for: productStore.activeProducts)
-                    // Bind every pending-* syncer once. Each subscribes to
-                    // NetworkMonitor.shared and drains its on-disk queue on
-                    // every offline → online transition; resumeIfNeeded covers
-                    // anything left queued from a previous session.
+                    // Bind syncers once; resumeIfNeeded drains anything
+                    // left over from a prior session.
                     PendingListingsSyncer.shared.bind(to: NetworkMonitor.shared)
                     PendingChatMessagesSyncer.shared.bind(to: NetworkMonitor.shared)
                     PendingFavoritesSyncer.shared.bind(to: NetworkMonitor.shared)

@@ -1,20 +1,7 @@
 import Foundation
 
-// File-backed queue of listings waiting for connectivity to be uploaded to
-// Firestore + Firebase Storage. All operations are synchronous; callers
-// should invoke from a background Task to keep I/O off the main thread.
-//
-// Layout:
-//  ~/Library/Application Support/UniMarket-Swift/PendingListings/{userID}/
-//      ├─ index.json                  ← [PendingListing] sorted by queuedAt
-//      ├─ {pendingID}.json            ← single PendingListing (duplicate of
-//      │                                 the index entry; lets us recover even
-//      │                                 if the index file gets corrupted)
-//      ├─ {pendingID}.image.0.jpg     ← raw JPEG bytes
-//      └─ {pendingID}.image.N.jpg
-//
-// All writes are atomic (.atomic option). The index is the canonical view of
-// the queue order; per-listing JSON files exist for resilience.
+// File-backed queue for offline listing creates. Synchronous I/O — callers
+// should dispatch via Task.detached. See EvCon.md §1 for the layout.
 final class PendingListingsStore {
     static let shared = PendingListingsStore()
 
@@ -74,8 +61,7 @@ final class PendingListingsStore {
         return ((try? readIndex(in: dir)) ?? []).count
     }
 
-    /// Reads back the form fields and image bytes so the caller can hand the
-    /// pending record to ProductService.createProduct unchanged.
+    /// Reconstructs a CreateProductInput by re-reading the JPEG sidecars.
     func materialize(_ pending: PendingListing) throws -> CreateProductInput {
         let dir = try userDirectory(for: pending.userID)
         var images: [Data] = []
@@ -98,8 +84,7 @@ final class PendingListingsStore {
         let dir = try userDirectory(for: userID)
         let listingURL = dir.appendingPathComponent("\(pendingID).json")
         try? fileManager.removeItem(at: listingURL)
-        // Remove all image sidecar files (we don't know imageCount here without
-        // reading the JSON, so we just sweep the directory by prefix).
+        // Sweep image sidecars by prefix — we don't have imageCount here.
         if let contents = try? fileManager.contentsOfDirectory(atPath: dir.path) {
             for name in contents where name.hasPrefix("\(pendingID).image.") {
                 try? fileManager.removeItem(at: dir.appendingPathComponent(name))
@@ -111,9 +96,7 @@ final class PendingListingsStore {
         try writeIndex(index, in: dir)
     }
 
-    /// Removes the entire per-user queue directory, including all pending records
-    /// and their JPEG sidecar files. Called at sign-out to prevent stale data
-    /// accumulating for accounts that won't return on this device.
+    /// Removes the entire per-user queue directory. Called at sign-out.
     func clearUserQueue(for userID: String) throws {
         let support = try fileManager.url(
             for: .applicationSupportDirectory,

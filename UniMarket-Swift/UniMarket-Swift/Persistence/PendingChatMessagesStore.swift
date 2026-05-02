@@ -1,12 +1,7 @@
 import Foundation
 
-// File-backed queue of outgoing chat messages waiting for connectivity.
-// All operations are synchronous; callers should invoke from a background Task.
-//
-// Layout:
-//  ~/Library/Application Support/UniMarket-Swift/PendingMessages/{userID}/
-//      ├─ index.json           ← [PendingChatMessage] sorted by queuedAt
-//      └─ {pendingID}.json     ← single record (resilience copy)
+// File-backed queue for offline outgoing chat messages. Synchronous I/O;
+// callers should dispatch via Task.detached. See EvCon.md §2.
 final class PendingChatMessagesStore {
     static let shared = PendingChatMessagesStore()
 

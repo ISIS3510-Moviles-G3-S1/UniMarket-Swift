@@ -2,14 +2,9 @@ import Foundation
 import Combine
 import FirebaseAuth
 
-// Eventual-connectivity coordinator for PendingListingMutationsStore. Replays
-// each queued update / delete through ProductService on every offline → online
-// transition.
-//
-// Observability
-// ─────────────
-// `pendingProductIDs` lets list cells in O(1) decide whether to render the
-// "Pending sync" pill. `pendingCount` drives the aggregate banner.
+// Connectivity-driven coordinator for PendingListingMutationsStore.
+// `pendingProductIDs` is a Set for O(1) lookups from listing-card views.
+// See EvCon.md §4.
 @MainActor
 final class PendingListingMutationsSyncer: ObservableObject {
     static let shared = PendingListingMutationsSyncer()

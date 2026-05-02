@@ -2,25 +2,8 @@ import Foundation
 import Combine
 import FirebaseAuth
 
-// Eventual-connectivity coordinator for the file-backed PendingListingsStore.
-//
-// Lifecycle
-// ─────────
-// 1. UniMarket_SwiftApp calls `bind(to:)` once at launch with the shared
-//    NetworkMonitor. The syncer subscribes to `isConnected` and refreshes
-//    its observable count.
-// 2. UploadProductViewModel.postProduct enqueues a record when the device is
-//    offline, or when the live publish path fails with a network-shaped error.
-// 3. Whenever connectivity transitions offline → online, `drain()` fires:
-//    each pending record is materialized and replayed through
-//    ProductService.createProduct (which itself uploads images in parallel).
-// 4. On launch, `resumeIfNeeded()` runs the same drain so anything queued in
-//    a previous session goes through as soon as the user is online.
-//
-// Observability
-// ─────────────
-// `pendingCount` is @Published so MainTabView can show a banner. `isDraining`
-// is published so the banner can show a "syncing now…" state.
+// Connectivity-driven coordinator for PendingListingsStore.
+// See EvCon.md §1 for the lifecycle and drain policy.
 @MainActor
 final class PendingListingsSyncer: ObservableObject {
     static let shared = PendingListingsSyncer()
@@ -42,8 +25,7 @@ final class PendingListingsSyncer: ObservableObject {
                     Task { await self.drain() }
                 }
             }
-        // Refresh count whenever the signed-in user changes so the banner stays
-        // accurate after sign-out or account switching without a connectivity flip.
+        // Refresh on user change so the banner reacts to sign-out / account switch.
         sessionCancellable = SessionManager.shared.$user
             .map { $0?.uid }
             .removeDuplicates()
@@ -65,13 +47,8 @@ final class PendingListingsSyncer: ObservableObject {
         let work = Task.detached(priority: .utility) {
             try await PendingListingsStore.shared.enqueue(input: input, userID: userID)
         }
-        do {
-            _ = try await work.value
-        } catch {
-            // If enqueue itself fails (no disk space, sandbox issue) we drop the
-            // record rather than crashing — caller already showed an error UI.
-            return
-        }
+        // Drop the record on enqueue failure (e.g. disk full); caller already showed an error UI.
+        do { _ = try await work.value } catch { return }
         await refreshCount()
     }
 
@@ -116,9 +93,7 @@ final class PendingListingsSyncer: ObservableObject {
                     )
                 }
                 _ = try? await bumpTask.value
-                // Stop draining on first failure — most failures are network or
-                // auth issues that will affect every remaining record. The next
-                // connectivity flip will retry.
+                // Stop on first failure — next connectivity flip retries.
                 break
             }
         }

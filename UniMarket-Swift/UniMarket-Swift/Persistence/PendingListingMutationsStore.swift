@@ -1,22 +1,8 @@
 import Foundation
 
-// File-backed queue of pending update/delete mutations for the seller's own
-// listings. All operations are synchronous; callers should invoke from a
-// background Task.
-//
-// Layout:
-//  ~/Library/Application Support/UniMarket-Swift/PendingMutations/{userID}/
-//      └─ index.json   ← [PendingListingMutation], coalesced per productID
-//
-// Coalescing rules (applied at enqueue time):
-//   existing       new          result
-//   ─────────────  ──────────   ────────────────────────────────────────
-//   none           any          append
-//   update         update       overwrite snapshot, refresh queuedAt
-//   update         delete       overwrite as delete (the update is moot)
-//   delete         update       keep the delete (a later update is invalid;
-//                                the listing is gone)
-//   delete         delete       refresh queuedAt
+// File-backed queue for offline listing edits/deletes. Synchronous I/O;
+// callers should dispatch via Task.detached. See EvCon.md §4 for the
+// per-productID coalescing rules.
 final class PendingListingMutationsStore {
     static let shared = PendingListingMutationsStore()
 
@@ -71,9 +57,7 @@ final class PendingListingMutationsStore {
             let existing = index[existingIdx]
             switch (existing.kind, kind) {
             case (.delete, .update):
-                // Keep the delete — a later update against a doc we're about
-                // to delete is meaningless. Refresh the timestamp so we drain
-                // sooner rather than later.
+                // Keep the delete; an update against a soon-deleted doc is moot.
                 index[existingIdx].queuedAt = Date()
             default:
                 index[existingIdx].kind = kind

@@ -3,16 +3,9 @@ import Combine
 import FirebaseAuth
 import FirebaseFirestore
 
-// Eventual-connectivity coordinator for PendingFavoritesStore. Replays each
-// queued op against the current user's Firestore `savedItems` array on every
-// offline → online transition.
-//
-// Observability
-// ─────────────
-// `pendingProductIDs` is a Set so views can in O(1) decide whether to render
-// the "syncing" affordance on a heart icon. `pendingCount` drives the inbox
-// banner aggregation. `lastSyncedAt` lets the UI distinguish "never synced"
-// from "synced a moment ago" without leaking timer state.
+// Connectivity-driven coordinator for PendingFavoritesStore.
+// `pendingProductIDs` is a Set for O(1) lookups from heart-icon views.
+// See EvCon.md §3.
 @MainActor
 final class PendingFavoritesSyncer: ObservableObject {
     static let shared = PendingFavoritesSyncer()

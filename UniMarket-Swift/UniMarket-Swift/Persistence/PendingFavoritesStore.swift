@@ -1,17 +1,7 @@
 import Foundation
 
-// File-backed queue of favorite-toggle operations that haven't been written to
-// the user's Firestore document yet. All operations are synchronous; callers
-// should invoke from a background Task.
-//
-// Layout:
-//  ~/Library/Application Support/UniMarket-Swift/PendingFavorites/{userID}/
-//      └─ index.json   ← [PendingFavoriteOp] (one per productID, last-write-wins)
-//
-// Why no per-record sidecar JSON like PendingListingsStore? Each op is a tiny
-// fixed-size struct — losing the index is recoverable by simply discarding the
-// queue. Image-bearing queues (listings, message images) need sidecars because
-// the JSON is large and the on-disk image bytes are irreplaceable.
+// File-backed queue for offline save/unsave taps. Single index.json — no
+// sidecars needed for these tiny records. See EvCon.md §3.
 final class PendingFavoritesStore {
     static let shared = PendingFavoritesStore()
 
@@ -31,13 +21,8 @@ final class PendingFavoritesStore {
 
     // MARK: - Public API
 
-    /// Records a save/unsave for a product. If a record for the same product
-    /// already exists, the policy is:
-    ///   - existing.kind == new.kind: refresh queuedAt (idempotent)
-    ///   - opposite kinds: remove the record entirely (the two cancel out)
-    /// This keeps the queue sized to "products with a net change," not "raw
-    /// taps," which matters for users who toggle a heart repeatedly while
-    /// offline.
+    /// Records a save/unsave op. Same-kind toggles refresh queuedAt;
+    /// opposite-kind toggles cancel the existing record out.
     func enqueue(productID: String, userID: String, kind: PendingFavoriteOp.Kind) throws {
         let dir = try userDirectory(for: userID)
         var index = (try? readIndex(in: dir)) ?? []

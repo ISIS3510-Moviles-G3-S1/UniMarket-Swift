@@ -1,13 +1,7 @@
 import Foundation
 
-// Persistent envelope for a listing the user has submitted but the network
-// hasn't accepted yet. Stored on disk under
-//   ~/Library/Application Support/UniMarket-Swift/PendingListings/{userID}/
-// as one JSON file plus N JPEG sidecar files (one per attached photo).
-//
-// Image bytes are kept in sidecar files (not base64 inline) to keep JSON
-// payloads small, debuggable, and editable, and to avoid the ~33% encoding
-// overhead of base64 for what could be several megabytes of image data.
+// Listing the user submitted but hasn't reached Firestore yet.
+// See EvCon.md §1 for the on-disk layout and image-sidecar rationale.
 struct PendingListing: Codable, Equatable, Identifiable {
     var id: String { pendingID }
 

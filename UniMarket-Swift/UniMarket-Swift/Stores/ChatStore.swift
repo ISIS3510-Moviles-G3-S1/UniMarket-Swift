@@ -16,9 +16,8 @@ struct ChatMessage: Identifiable, Hashable {
     var readAt: Date?
     let replyTo: ReplySnapshot?
     let listingSnapshot: ListingSnapshot?
-    /// Delivery state for the chat outbox. Defaults to `.delivered` for any
-    /// message that originated from a Firestore snapshot. Local-only optimistic
-    /// bubbles use `.pending` while they sit in PendingChatMessagesStore.
+    /// `.pending` for local optimistic bubbles still in the outbox;
+    /// `.delivered` once the Firestore snapshot replaces them.
     var deliveryState: DeliveryState = .delivered
 
     var isFromCurrentUser: Bool {
@@ -201,12 +200,21 @@ final class ChatStore: ObservableObject {
         var otherName = "Unknown"
         var otherAvatar: String? = nil
 
-        // fetch display name from users collection
-        if !otherUID.isEmpty,
-           let userDoc = try? await db.collection("users").document(otherUID).getDocument(),
-           let userData = userDoc.data() {
-            otherName = userData["displayName"] as? String ?? "Unknown"
-            otherAvatar = userData["profilePic"] as? String
+        // Try UserProfileCache before the user-doc Firestore read.
+        if !otherUID.isEmpty {
+            if let hit = UserProfileCache.shared.lookup(uid: otherUID) {
+                otherName = hit.displayName
+                otherAvatar = hit.profilePic
+            } else if let userDoc = try? await db.collection("users").document(otherUID).getDocument(),
+                      let userData = userDoc.data() {
+                otherName = userData["displayName"] as? String ?? "Unknown"
+                otherAvatar = userData["profilePic"] as? String
+                UserProfileCache.shared.store(
+                    uid: otherUID,
+                    displayName: otherName,
+                    profilePic: otherAvatar
+                )
+            }
         }
 
         // unread count: messages where senderId != me and readAt is missing
@@ -361,9 +369,7 @@ final class ChatStore: ObservableObject {
         let msgRef = db.collection("conversations").document(conversationID)
             .collection("messages").document()
 
-        // Offline path: enqueue to PendingChatMessagesStore and append a
-        // `.pending` optimistic bubble. The Firestore listener will replace it
-        // with a `.delivered` server-side message once the syncer drains.
+        // Offline: enqueue + append a .pending optimistic bubble.
         if !NetworkMonitor.shared.isConnected {
             await PendingChatMessagesSyncer.shared.enqueue(
                 userID: uid,
@@ -431,10 +437,7 @@ final class ChatStore: ObservableObject {
                 "lastMessageAt": FieldValue.serverTimestamp()
             ])
         } catch {
-            // The send started online but the network dropped mid-flight (or
-            // Firestore returned a transient error). Convert the optimistic
-            // bubble into a queued one and hand the syncer the same messageID
-            // so the eventual listener replacement still de-dupes correctly.
+            // Mid-flight network drop: convert the optimistic bubble into a queued one.
             if Self.isLikelyNetworkError(error) {
                 await PendingChatMessagesSyncer.shared.enqueue(
                     userID: uid,

@@ -3,25 +3,16 @@ import Combine
 import FirebaseAuth
 import FirebaseFirestore
 
-// Eventual-connectivity coordinator for the file-backed PendingChatMessagesStore.
-// Mirrors the lifecycle of PendingListingsSyncer: subscribes to NetworkMonitor,
-// drains on every offline → online transition, replays records by writing
-// directly to Firestore (the messages subcollection of each conversation).
-//
-// Observability
-// ─────────────
-// `pendingCount` is @Published so banners/UI can react. `pendingByConversation`
-// is published so ChatThreadView can render in-flight bubbles for the
-// conversation it's showing without polling the disk.
+// Connectivity-driven coordinator for PendingChatMessagesStore.
+// See EvCon.md §2 for the lifecycle and replay semantics.
 @MainActor
 final class PendingChatMessagesSyncer: ObservableObject {
     static let shared = PendingChatMessagesSyncer()
 
     @Published private(set) var pendingCount: Int = 0
     @Published private(set) var isDraining: Bool = false
-    /// Snapshot of queued messages keyed by conversation ID, refreshed after
-    /// every enqueue / drain step. ChatThreadView observes this to render
-    /// pending bubbles.
+    /// Queued messages grouped by conversation; ChatThreadView reads this to
+    /// render pending bubbles after a cold launch.
     @Published private(set) var pendingByConversation: [String: [PendingChatMessage]] = [:]
 
     private let db = Firestore.firestore()
@@ -56,9 +47,8 @@ final class PendingChatMessagesSyncer: ObservableObject {
         }
     }
 
-    /// Reserve a Firestore message ID up-front and queue the text. The caller
-    /// passes the same `messageID` into the optimistic ChatMessage so the
-    /// listener-driven replacement and the queued record share an identity.
+    /// Caller passes the same `messageID` into the optimistic ChatMessage so
+    /// the listener-driven replacement de-dupes by id.
     func enqueue(
         userID: String,
         conversationID: String,
@@ -117,9 +107,7 @@ final class PendingChatMessagesSyncer: ObservableObject {
                     )
                 }
                 _ = try? await bumpTask.value
-                // Stop on first failure — most failures are network-shaped and
-                // will affect every remaining record. The next connectivity
-                // flip retries from where we left off.
+                // Stop on first failure — next connectivity flip retries.
                 break
             }
         }

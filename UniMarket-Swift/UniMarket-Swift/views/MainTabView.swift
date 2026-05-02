@@ -111,11 +111,7 @@ struct MainTabView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
-    /// Builds the banner copy. When a single queue type is active, the banner
-    /// names that type ("3 messages waiting for connectivity"). When multiple
-    /// queue types have records, it falls back to a generic count
-    /// ("4 changes waiting for connectivity") so the banner doesn't try to
-    /// enumerate every category.
+    /// Single-queue: name the type. Multi-queue: generic "X changes" copy.
     private var bannerLabel: String {
         let parts: [(Int, String)] = [
             (pendingListings.pendingCount, "listing"),

@@ -1,9 +1,7 @@
 import Foundation
 
-// Persistent record of a save / unsave action the user took while offline.
-// One record per (productID, userID); a new toggle for the same product
-// collapses or removes the existing record (last-write-wins) so the queue
-// never grows past the number of distinct products the user touched.
+// Save/unsave op queued while offline. Coalesced per productID — see
+// EvCon.md §3 for the merge rules.
 struct PendingFavoriteOp: Codable, Equatable, Identifiable {
     var id: String { productID }
 
