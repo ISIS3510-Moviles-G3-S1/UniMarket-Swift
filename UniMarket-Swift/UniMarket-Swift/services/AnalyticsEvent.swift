@@ -276,6 +276,34 @@ extension AnalyticsEvent {
         )
     }
 
+    /// BQ#1 buyer-intent funnel marker. See BQ.md / Wiki §7.
+    static func chatStartedFromListing(
+        productID: String,
+        sellerID: String,
+        price: Int,
+        source: String
+    ) -> AnalyticsEvent {
+        AnalyticsEvent(
+            name: "chat_started_from_listing",
+            parameters: [
+                "product_id": .string(productID),
+                "seller_id": .string(sellerID),
+                "price_bucket": .string(priceBucket(for: price)),
+                "source": .string(source)
+            ]
+        )
+    }
+
+    /// Mirror of ProductService.priceBucket(for:); keep buckets identical.
+    static func priceBucket(for price: Int) -> String {
+        switch price {
+        case ..<25_000:    return "under_25k"
+        case 25_000..<50_000:  return "25k_50k"
+        case 50_000..<100_000: return "50k_100k"
+        default:           return "100k_plus"
+        }
+    }
+
     static func purchaseConfirmed(productID: String, transactionID: String, source: String) -> AnalyticsEvent {
         AnalyticsEvent(
             name: "purchase_confirmed",

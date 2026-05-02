@@ -284,6 +284,16 @@ struct ProductDetailView: View {
                 Button {
                     guard !isStartingChat else { return }
                     isStartingChat = true
+                    // BQ#1 buyer-intent marker — fires on tap, not after the
+                    // Firestore write, so offline taps still count.
+                    analytics.track(.chatStartedFromListing(
+                        productID: vm.id,
+                        sellerID: vm.sellerId,
+                        price: vm.price,
+                        source: source == .unknown
+                            ? AnalyticsSurface.productDetail.rawValue
+                            : source.rawValue
+                    ))
                     Task {
                         do {
                             let listing = ChatMessage.ListingSnapshot(
