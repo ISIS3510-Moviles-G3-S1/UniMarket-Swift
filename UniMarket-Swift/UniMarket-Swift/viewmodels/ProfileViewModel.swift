@@ -356,7 +356,22 @@ final class ProfileViewModel: ObservableObject {
     @MainActor
     func refreshSustainabilityImpact(reason: String) async {
         let soldListings = listings.filter { $0.soldAt != nil }
-        let summary = SustainabilityImpact.calculate(from: soldListings)
+
+        // Memoize via ProfileInsightsLRU; fingerprint changes only when the
+        // sold-listings set actually changes.
+        let userID = SessionManager.shared.currentUser?.id ?? "guest"
+        let fingerprint = ProfileInsightsLRU.fingerprint(soldProducts: soldListings)
+        let summary: SustainabilityImpact
+        if let hit = ProfileInsightsLRU.shared.lookup(userID: userID, fingerprint: fingerprint) {
+            summary = hit
+        } else {
+            summary = SustainabilityImpact.calculate(from: soldListings)
+            ProfileInsightsLRU.shared.store(
+                userID: userID,
+                fingerprint: fingerprint,
+                summary: summary
+            )
+        }
         impactSummary = summary
 
         let defaults = UserDefaults.standard

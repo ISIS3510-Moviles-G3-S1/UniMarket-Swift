@@ -18,10 +18,8 @@ struct ChatThreadView: View {
 
     private var messages: [ChatMessage] {
         let live = chatStore.messagesByConversation[conversationID] ?? []
-        // Merge in any disk-persisted pending records that aren't already
-        // represented in the in-memory thread (cold launch case where
-        // messagesByConversation hydrates from SwiftData and doesn't contain
-        // the optimistic pending bubble that was appended in a prior session).
+        // Merge disk-persisted pending records not yet in the in-memory thread
+        // (cold-launch case — SwiftData doesn't carry the outbox).
         let queued = pendingMessages.pendingByConversation[conversationID] ?? []
         guard !queued.isEmpty else { return live }
         let liveIDs = Set(live.map(\.id))
@@ -392,8 +390,7 @@ private struct MessageBubble: View {
 
                     if message.isFromCurrentUser {
                         if message.deliveryState == .pending {
-                            // Outbox state — the message is on disk waiting for
-                            // connectivity. Mirrors WhatsApp's single-clock affordance.
+                            // Single-clock affordance for queued outgoing messages.
                             Image(systemName: "clock")
                                 .font(.system(size: 10))
                                 .foregroundStyle(AppTheme.secondaryText)

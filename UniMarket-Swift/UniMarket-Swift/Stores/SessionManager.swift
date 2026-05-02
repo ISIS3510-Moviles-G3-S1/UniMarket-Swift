@@ -141,6 +141,8 @@ final class SessionManager: ObservableObject {
         user = nil
         currentUser = nil
         isLoading = false
+        UserProfileCache.shared.clear()
+        ProfileInsightsLRU.shared.clear()
         analytics.track(.signOut())
         analytics.reset()
     }
