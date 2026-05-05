@@ -156,6 +156,7 @@ struct SearchView: View {
             isFavorite: !product.isFavorite,
             source: source.rawValue
         ))
+        FavoritesCacheManager.shared.saveLastInteraction()
     }
 
     private func selectProduct(_ product: Product, source: AnalyticsSurface) {

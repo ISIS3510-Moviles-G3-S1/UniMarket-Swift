@@ -155,6 +155,7 @@ struct ProductDetailView: View {
                 isOwnListing: vm.isOwnListing,
                 source: source.rawValue
             ))
+            FavoritesCacheManager.shared.saveLastInteraction()
         }
         .onReceive(productStore.$products) { products in
             guard let updatedProduct = products.first(where: { $0.id == vm.id }) else { return }
@@ -280,6 +281,7 @@ struct ProductDetailView: View {
                         isFavorite: nextFavoriteState,
                         source: source == .unknown ? AnalyticsSurface.productDetail.rawValue : source.rawValue
                     ))
+                    FavoritesCacheManager.shared.saveLastInteraction()
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: vm.isFavorite ? "heart.fill" : "heart")
