@@ -146,7 +146,7 @@ final class ProductService {
                 sellerID: product.sellerId,
                 priceBucket: priceBucket(for: product.price)
             ))
-            
+            FavoritesCacheManager.shared.saveLastInteraction()
             // Notify that user sold a listing
             NotificationCenter.default.post(name: .userDidSellListing, object: nil)
         }
