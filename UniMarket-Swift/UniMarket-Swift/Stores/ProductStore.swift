@@ -16,8 +16,11 @@ final class ProductStore: ObservableObject {
     private var imagePrefetcher: ImagePrefetcher?
     private var savedProductIDs: Set<String> = []
 
+    private let productCacheKey = "unimarket.cached_products"
+
     init(service: ProductService? = nil) {
         self.service = service ?? ProductService.shared
+        loadFromCache()
         Task { await loadSavedItems() }
         startListening()
     }
@@ -210,6 +213,18 @@ final class ProductStore: ObservableObject {
         }
     }
 
+    private func loadFromCache() {
+        guard let data = UserDefaults.standard.data(forKey: productCacheKey),
+              let cached = try? JSONDecoder().decode([Product].self, from: data)
+        else { return }
+        products = cached
+    }
+
+    private func saveToCache(_ products: [Product]) {
+        guard let data = try? JSONEncoder().encode(products) else { return }
+        UserDefaults.standard.set(data, forKey: productCacheKey)
+    }
+
     private func startListening() {
         isLoading = true
         listener?.remove()
@@ -222,6 +237,7 @@ final class ProductStore: ObservableObject {
                     self.applySavedState()
                     self.errorMessage = nil
                     self.prefetchImages(for: products)
+                    self.saveToCache(products)
                 case .failure(let error):
                     self.errorMessage = error.localizedDescription
                 }
