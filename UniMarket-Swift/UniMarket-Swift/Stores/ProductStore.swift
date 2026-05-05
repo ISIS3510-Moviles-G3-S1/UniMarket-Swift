@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import FirebaseAuth
 import FirebaseFirestore
-import Kingfisher
+import UIKit
 
 @MainActor
 final class ProductStore: ObservableObject {
@@ -13,7 +13,7 @@ final class ProductStore: ObservableObject {
     private let service: ProductService
     private let db = Firestore.firestore()
     private var listener: ListenerRegistration?
-    private var imagePrefetcher: ImagePrefetcher?
+    private var prefetchTask: Task<Void, Never>?
     private var savedProductIDs: Set<String> = []
 
     init(service: ProductService? = nil) {
@@ -24,7 +24,7 @@ final class ProductStore: ObservableObject {
 
     deinit {
         listener?.remove()
-        imagePrefetcher?.stop()
+        prefetchTask?.cancel()
     }
 
     var activeProducts: [Product] {
@@ -52,12 +52,23 @@ final class ProductStore: ObservableObject {
             .filter { !$0.isEmpty }
             .prefix(12)
             .compactMap { URL(string: $0) }
+            .filter { ProductImageCache.shared.image(for: $0) == nil }  // skip already-cached
 
         guard !urls.isEmpty else { return }
 
-        imagePrefetcher?.stop()
-        imagePrefetcher = ImagePrefetcher(urls: Array(urls))
-        imagePrefetcher?.start()
+        prefetchTask?.cancel()
+        prefetchTask = Task {
+            await withTaskGroup(of: Void.self) { group in
+                for url in urls {
+                    group.addTask {
+                        guard let (data, _) = try? await URLSession.shared.data(from: url),
+                              !Task.isCancelled,
+                              let image = UIImage(data: data) else { return }
+                        ProductImageCache.shared.store(image, for: url)
+                    }
+                }
+            }
+        }
     }
 
     func toggleFavorite(for product: Product) {
