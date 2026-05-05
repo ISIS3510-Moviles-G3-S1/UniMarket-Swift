@@ -129,10 +129,20 @@ final class SessionManager: ObservableObject {
 
     // MARK: - Sign Out
     func signOut() throws {
+        if let uid = user?.uid {
+            Task.detached(priority: .background) {
+                try? await PendingListingsStore.shared.clearUserQueue(for: uid)
+                try? await PendingChatMessagesStore.shared.clearUserQueue(for: uid)
+                try? await PendingFavoritesStore.shared.clearUserQueue(for: uid)
+                try? await PendingListingMutationsStore.shared.clearUserQueue(for: uid)
+            }
+        }
         try Auth.auth().signOut()
         user = nil
         currentUser = nil
         isLoading = false
+        UserProfileCache.shared.clear()
+        ProfileInsightsLRU.shared.clear()
         analytics.track(.signOut())
         analytics.reset()
     }
