@@ -9,6 +9,9 @@ import Foundation
 import UIKit
 import Combine
 
+// @MainActor guarantees all @Published property mutations happen on the main thread,
+// satisfying SwiftUI's requirement that ObservableObject updates are on the main thread.
+@MainActor
 class ClothingAnalysisViewModel: NSObject, ObservableObject {
     // MARK: - Published Properties
     @Published var isAnalyzing = false
@@ -20,7 +23,6 @@ class ClothingAnalysisViewModel: NSObject, ObservableObject {
     
     // MARK: - Private Properties
     private let coreMLFacade = CoreMLAnalysisFacade()
-    private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Initialization
     override init() {
@@ -99,6 +101,8 @@ class ClothingAnalysisViewModel: NSObject, ObservableObject {
         } else {
             if let index = editableTags.firstIndex(where: { $0.id == tag.id }) {
                 editableTags[index] = tag
+            } else {
+                editableTags.append(tag)
             }
         }
     }
