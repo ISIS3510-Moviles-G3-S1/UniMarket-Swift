@@ -8,6 +8,7 @@ import CoreImage.CIFilterBuiltins
 
 struct GenerateQRView: View {
     @StateObject private var vm: GenerateQRViewModel
+    @StateObject private var networkMonitor = NetworkMonitor()
     @Environment(\.dismiss) private var dismiss
 
     init(listingId: String, sellerId: String, listingStatus: ProductStatus) {
@@ -40,6 +41,25 @@ struct GenerateQRView: View {
     private var inputView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+
+                if !networkMonitor.isConnected {
+                    HStack(spacing: 10) {
+                        Image(systemName: "wifi.slash")
+                            .foregroundStyle(.red)
+                        Text("You need a connection to confirm meetups")
+                            .font(.poppinsSemiBold(14))
+                            .foregroundStyle(.red)
+                        Spacer()
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity)
+                    .background(Color.red.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color.red.opacity(0.25), lineWidth: 1)
+                    )
+                }
 
                 if !vm.isListingActive {
                     HStack(spacing: 10) {
@@ -107,10 +127,10 @@ struct GenerateQRView: View {
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(vm.isListingActive ? AppTheme.accent : AppTheme.secondaryText)
+                    .background(vm.isListingActive && networkMonitor.isConnected ? AppTheme.accent : AppTheme.secondaryText)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
-                .disabled(!vm.isListingActive)
+                .disabled(!vm.isListingActive || !networkMonitor.isConnected)
             }
             .padding(20)
         }

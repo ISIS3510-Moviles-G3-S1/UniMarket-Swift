@@ -13,6 +13,7 @@ struct ProductDetailView: View {
     @EnvironmentObject private var productStore: ProductStore
 
     @StateObject private var vm: ProductDetailViewModel
+    @StateObject private var networkMonitor = NetworkMonitor()
     @State private var editingProduct: Product?
     @State private var chatConversationID: String?
     @State private var isStartingChat = false
@@ -42,6 +43,21 @@ struct ProductDetailView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    if !networkMonitor.isConnected {
+                        HStack(spacing: 8) {
+                            Image(systemName: "internaldrive")
+                                .foregroundStyle(AppTheme.secondaryText)
+                            Text("You're offline — showing locally stored data")
+                                .font(.poppinsRegular(13))
+                                .foregroundStyle(AppTheme.secondaryText)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(AppTheme.cardBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+
                     imageHeader
 
                     Text(vm.title)

@@ -12,6 +12,7 @@ struct SearchView: View {
     @EnvironmentObject private var productStore: ProductStore
     @StateObject private var browseViewModel = BrowseSearchViewModel()
     @StateObject private var recommendationsViewModel = SearchRecommendationsViewModel()
+    @StateObject private var networkMonitor = NetworkMonitor()
     @State private var selectedSection: SearchSection = .browse
     @State private var selectedProductRoute: ProductRoute?
     @State private var hasTrackedSearchView = false
@@ -33,6 +34,22 @@ struct SearchView: View {
                         .foregroundStyle(AppTheme.secondaryText)
                 }
                 .padding(.horizontal)
+
+                if !networkMonitor.isConnected {
+                    HStack(spacing: 8) {
+                        Image(systemName: "wifi.slash")
+                            .foregroundStyle(.orange)
+                        Text("You're offline — showing cached products")
+                            .font(.poppinsRegular(13))
+                            .foregroundStyle(.orange)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color.orange.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .padding(.horizontal)
+                }
 
                 Picker("", selection: $selectedSection) {
                     ForEach(SearchSection.allCases) { section in

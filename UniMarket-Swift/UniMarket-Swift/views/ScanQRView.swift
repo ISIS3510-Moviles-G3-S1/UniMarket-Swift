@@ -10,6 +10,7 @@ import AVFoundation
 
 struct ScanQRView: View {
     @StateObject private var vm: ScanQRViewModel
+    @StateObject private var networkMonitor = NetworkMonitor()
     @Environment(\.dismiss) private var dismiss
 
     init(productID: String? = nil, source: AnalyticsSurface = .unknown) {
@@ -20,19 +21,49 @@ struct ScanQRView: View {
         ZStack {
             AppTheme.background.ignoresSafeArea()
 
-            switch vm.scanState {
-            case .scanning:
-                scanningView
-            case .confirming(let transactionId):
-                confirmingView(transactionId: transactionId)
-            case .loading:
-                loadingView
-            case .confirmed:
-                confirmedView
-            case .error(let message):
-                errorView(message: message)
+            if !networkMonitor.isConnected {
+                offlineBlockedView
+            } else {
+                switch vm.scanState {
+                case .scanning:
+                    scanningView
+                case .confirming(let transactionId):
+                    confirmingView(transactionId: transactionId)
+                case .loading:
+                    loadingView
+                case .confirmed:
+                    confirmedView
+                case .error(let message):
+                    errorView(message: message)
+                }
             }
         }
+    }
+
+    private var offlineBlockedView: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "wifi.slash")
+                .font(.system(size: 60))
+                .foregroundStyle(.red)
+
+            Text("No Connection")
+                .font(.poppinsBold(22))
+                .foregroundStyle(AppTheme.primaryText)
+
+            Text("You need a connection to confirm meetups")
+                .font(.poppinsRegular(14))
+                .foregroundStyle(AppTheme.secondaryText)
+                .multilineTextAlignment(.center)
+
+            Button("Close") { dismiss() }
+                .font(.poppinsSemiBold(16))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(.red)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .padding(24)
     }
 
     // MARK: - States

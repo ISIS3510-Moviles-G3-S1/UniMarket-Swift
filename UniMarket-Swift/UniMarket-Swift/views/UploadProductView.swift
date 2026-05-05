@@ -17,6 +17,7 @@ struct UploadProductView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var productStore: ProductStore
     @StateObject private var vm = UploadProductViewModel()
+    @StateObject private var networkMonitor = NetworkMonitor()
 
     @State private var showCamera = false
     @State private var showClothingAnalysis = false
@@ -85,6 +86,25 @@ struct UploadProductView: View {
                             .font(.poppinsRegular(12))
                     }
 
+                    if !networkMonitor.isConnected {
+                        HStack(spacing: 8) {
+                            Image(systemName: "wifi.slash")
+                                .foregroundStyle(.red)
+                            Text("You need a connection to publish listings")
+                                .font(.poppinsSemiBold(14))
+                                .foregroundStyle(.red)
+                            Spacer()
+                        }
+                        .padding(14)
+                        .frame(maxWidth: .infinity)
+                        .background(Color.red.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(Color.red.opacity(0.25), lineWidth: 1)
+                        )
+                    }
+
                     Button {
                         Task {
                             let didPublish = await vm.postProduct(using: productStore)
@@ -107,9 +127,9 @@ struct UploadProductView: View {
                         }
                         .padding()
                     }
-                    .background(vm.canPost ? AppTheme.accent : AppTheme.secondaryText.opacity(0.35))
+                    .background(vm.canPost && networkMonitor.isConnected ? AppTheme.accent : AppTheme.secondaryText.opacity(0.35))
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .disabled(!vm.canPost || vm.isPosting)
+                    .disabled(!vm.canPost || vm.isPosting || !networkMonitor.isConnected)
 
                     Spacer(minLength: 20)
                 }
