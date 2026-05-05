@@ -75,6 +75,19 @@ final class ProductStore: ObservableObject {
         }
 
         guard let uid = Auth.auth().currentUser?.uid else { return }
+
+        // Offline: enqueue rather than letting Firestore's offline cache buffer
+        // the write opaquely — we need our own "pending" UI state.
+        if !NetworkMonitor.shared.isConnected {
+            Task {
+                await PendingFavoritesSyncer.shared.enqueue(
+                    productID: product.id,
+                    kind: isSaved ? .save : .unsave
+                )
+            }
+            return
+        }
+
         let ref = db.collection("users").document(uid)
         Task {
             do {
@@ -83,7 +96,13 @@ final class ProductStore: ObservableObject {
                 } else {
                     try await ref.updateData(["savedItems": FieldValue.arrayRemove([product.id])])
                 }
-            } catch { }
+            } catch {
+                // Mid-write network drop: hand the op to the syncer.
+                await PendingFavoritesSyncer.shared.enqueue(
+                    productID: product.id,
+                    kind: isSaved ? .save : .unsave
+                )
+            }
         }
     }
 
@@ -92,11 +111,67 @@ final class ProductStore: ObservableObject {
     }
 
     func updateProduct(_ product: Product) async throws {
-        try await service.updateProduct(product)
+        if !NetworkMonitor.shared.isConnected {
+            applyLocalMutation(product)
+            await PendingListingMutationsSyncer.shared.enqueueUpdate(product: product)
+            return
+        }
+        do {
+            try await service.updateProduct(product)
+        } catch {
+            if Self.isLikelyNetworkError(error) {
+                applyLocalMutation(product)
+                await PendingListingMutationsSyncer.shared.enqueueUpdate(product: product)
+                return
+            }
+            throw error
+        }
     }
 
     func deleteProduct(_ product: Product) async throws {
-        try await service.deleteProduct(product)
+        if !NetworkMonitor.shared.isConnected {
+            applyLocalDelete(productID: product.id)
+            await PendingListingMutationsSyncer.shared.enqueueDelete(product: product)
+            return
+        }
+        do {
+            try await service.deleteProduct(product)
+        } catch {
+            if Self.isLikelyNetworkError(error) {
+                applyLocalDelete(productID: product.id)
+                await PendingListingMutationsSyncer.shared.enqueueDelete(product: product)
+                return
+            }
+            throw error
+        }
+    }
+
+    private func applyLocalMutation(_ product: Product) {
+        guard let idx = products.firstIndex(where: { $0.id == product.id }) else { return }
+        var existing = products[idx]
+        existing.title = product.title
+        existing.price = product.price
+        existing.status = product.status
+        existing.soldAt = product.soldAt
+        products[idx] = existing
+    }
+
+    private func applyLocalDelete(productID: String) {
+        products.removeAll { $0.id == productID }
+        savedProductIDs.remove(productID)
+    }
+
+    private static func isLikelyNetworkError(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain { return true }
+        let networkCodes: Set<Int> = [
+            NSURLErrorNotConnectedToInternet,
+            NSURLErrorTimedOut,
+            NSURLErrorNetworkConnectionLost,
+            NSURLErrorCannotConnectToHost,
+            NSURLErrorCannotFindHost
+        ]
+        return networkCodes.contains(nsError.code)
     }
 
     func loadSavedItems() async {
@@ -105,8 +180,31 @@ final class ProductStore: ObservableObject {
             let doc = try await db.collection("users").document(uid).getDocument()
             let ids = doc.data()?["savedItems"] as? [String] ?? []
             savedProductIDs = Set(ids)
+            mergePendingFavorites(for: uid)
             applySavedState()
         } catch { }
+    }
+
+    /// Applies pre-fetched saved item IDs (typically from LoginBootstrapper) so
+    /// the favorites state lights up without a second Firestore round-trip.
+    func applySavedItemIDs(_ ids: [String]) {
+        savedProductIDs = Set(ids)
+        if let uid = Auth.auth().currentUser?.uid {
+            mergePendingFavorites(for: uid)
+        }
+        applySavedState()
+    }
+
+    /// Overlays queued ops on top of Firestore's savedItems so the heart
+    /// icon reflects user intent before the syncer drains.
+    private func mergePendingFavorites(for userID: String) {
+        let ops = (try? PendingFavoritesStore.shared.allPending(for: userID)) ?? []
+        for op in ops {
+            switch op.kind {
+            case .save: savedProductIDs.insert(op.productID)
+            case .unsave: savedProductIDs.remove(op.productID)
+            }
+        }
     }
 
     private func applySavedState() {
