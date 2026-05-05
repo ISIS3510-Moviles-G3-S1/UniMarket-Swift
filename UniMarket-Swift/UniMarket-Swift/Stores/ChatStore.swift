@@ -16,6 +16,9 @@ struct ChatMessage: Identifiable, Hashable {
     var readAt: Date?
     let replyTo: ReplySnapshot?
     let listingSnapshot: ListingSnapshot?
+    /// `.pending` for local optimistic bubbles still in the outbox;
+    /// `.delivered` once the Firestore snapshot replaces them.
+    var deliveryState: DeliveryState = .delivered
 
     var isFromCurrentUser: Bool {
         senderId == Auth.auth().currentUser?.uid
@@ -23,6 +26,11 @@ struct ChatMessage: Identifiable, Hashable {
 
     enum MessageType: String {
         case text, image, listing
+    }
+
+    enum DeliveryState: Hashable {
+        case delivered
+        case pending
     }
 
     struct ReplySnapshot: Hashable {
@@ -78,6 +86,22 @@ final class ChatStore: ObservableObject {
         guard let uid = Auth.auth().currentUser?.uid else { return }
         isLoading = true
 
+        // Hydrate from SwiftData first so the inbox renders the last-known
+        // conversations + cached otherParticipantName/avatar instantly, before
+        // Firestore replies. The Firestore snapshot below will replace this.
+        let cached = ChatLocalStore.shared.loadAllConversations()
+        if !cached.isEmpty {
+            self.conversations = cached
+            // Also hydrate per-conversation message threads so opening a chat
+            // shows history immediately on cold launch.
+            for conv in cached {
+                let cachedMessages = ChatLocalStore.shared.loadMessages(for: conv.id)
+                if !cachedMessages.isEmpty {
+                    self.messagesByConversation[conv.id] = cachedMessages
+                }
+            }
+        }
+
         conversationListener = db.collection("conversations")
             .whereField("participants", arrayContains: uid)
             .addSnapshotListener { [weak self] snapshot, error in
@@ -92,13 +116,21 @@ final class ChatStore: ObservableObject {
                     for doc in snapshot.documents {
                         if let conv = await self.parseConversation(doc: doc, currentUID: uid) {
                             updated.append(conv)
+                            // Mirror to SwiftData. otherParticipantName/avatar are
+                            // resolved by parseConversation via a users collection
+                            // read — caching them here removes that round-trip on
+                            // every cold launch.
+                            ChatLocalStore.shared.upsertConversation(conv)
                         }
                     }
                     self.conversations = updated.sorted {
                         ($0.lastMessageAt ?? .distantPast) > ($1.lastMessageAt ?? .distantPast)
                     }
+                    // Drop any locally-cached conversations the user is no longer
+                    // a participant in.
+                    ChatLocalStore.shared.removeConversations(notIn: Set(updated.map(\.id)))
                     self.isLoading = false
-                    
+
                     // Start listening to all conversations for unread count updates
                     self.startListeningToAllConversationsForUnreadCounts(uid: uid)
                 }
@@ -135,6 +167,11 @@ final class ChatStore: ObservableObject {
                     let messages = snapshot.documents.compactMap { self.parseMessage(doc: $0) }
                     self.messagesByConversation[conversationID] = messages
 
+                    // Mirror the full message thread to SwiftData. replaceMessages
+                    // upserts existing rows by id and deletes any that are no longer
+                    // present in the Firestore snapshot.
+                    ChatLocalStore.shared.replaceMessages(messages, for: conversationID)
+
                     // Update unread count on the conversation object
                     if let idx = self.conversations.firstIndex(where: { $0.id == conversationID }) {
                         let unread = messages.filter { !$0.isFromCurrentUser && $0.readAt == nil }.count
@@ -163,12 +200,21 @@ final class ChatStore: ObservableObject {
         var otherName = "Unknown"
         var otherAvatar: String? = nil
 
-        // fetch display name from users collection
-        if !otherUID.isEmpty,
-           let userDoc = try? await db.collection("users").document(otherUID).getDocument(),
-           let userData = userDoc.data() {
-            otherName = userData["displayName"] as? String ?? "Unknown"
-            otherAvatar = userData["profilePic"] as? String
+        // Try UserProfileCache before the user-doc Firestore read.
+        if !otherUID.isEmpty {
+            if let hit = UserProfileCache.shared.lookup(uid: otherUID) {
+                otherName = hit.displayName
+                otherAvatar = hit.profilePic
+            } else if let userDoc = try? await db.collection("users").document(otherUID).getDocument(),
+                      let userData = userDoc.data() {
+                otherName = userData["displayName"] as? String ?? "Unknown"
+                otherAvatar = userData["profilePic"] as? String
+                UserProfileCache.shared.store(
+                    uid: otherUID,
+                    displayName: otherName,
+                    profilePic: otherAvatar
+                )
+            }
         }
 
         // unread count: messages where senderId != me and readAt is missing
@@ -323,6 +369,33 @@ final class ChatStore: ObservableObject {
         let msgRef = db.collection("conversations").document(conversationID)
             .collection("messages").document()
 
+        // Offline: enqueue + append a .pending optimistic bubble.
+        if !NetworkMonitor.shared.isConnected {
+            await PendingChatMessagesSyncer.shared.enqueue(
+                userID: uid,
+                conversationID: conversationID,
+                messageID: msgRef.documentID,
+                text: trimmed,
+                replyTo: replyTo
+            )
+            let pending = ChatMessage(
+                id: msgRef.documentID,
+                senderId: uid,
+                text: trimmed,
+                imageURLs: [],
+                type: .text,
+                sentAt: Date(),
+                readAt: nil,
+                replyTo: replyTo,
+                listingSnapshot: nil,
+                deliveryState: .pending
+            )
+            var current = messagesByConversation[conversationID] ?? []
+            current.append(pending)
+            messagesByConversation[conversationID] = current
+            return
+        }
+
         // Optimistic local update — message appears in the UI immediately.
         let optimistic = ChatMessage(
             id: msgRef.documentID,
@@ -357,11 +430,44 @@ final class ChatStore: ObservableObject {
         }
 
         // write message, then update conversation summary
-        try await msgRef.setData(msgData)
-        try await db.collection("conversations").document(conversationID).updateData([
-            "lastMessageText": trimmed,
-            "lastMessageAt": FieldValue.serverTimestamp()
-        ])
+        do {
+            try await msgRef.setData(msgData)
+            try await db.collection("conversations").document(conversationID).updateData([
+                "lastMessageText": trimmed,
+                "lastMessageAt": FieldValue.serverTimestamp()
+            ])
+        } catch {
+            // Mid-flight network drop: convert the optimistic bubble into a queued one.
+            if Self.isLikelyNetworkError(error) {
+                await PendingChatMessagesSyncer.shared.enqueue(
+                    userID: uid,
+                    conversationID: conversationID,
+                    messageID: msgRef.documentID,
+                    text: trimmed,
+                    replyTo: replyTo
+                )
+                if var msgs = messagesByConversation[conversationID],
+                   let idx = msgs.firstIndex(where: { $0.id == msgRef.documentID }) {
+                    msgs[idx].deliveryState = .pending
+                    messagesByConversation[conversationID] = msgs
+                }
+                return
+            }
+            throw error
+        }
+    }
+
+    private static func isLikelyNetworkError(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain { return true }
+        let networkCodes: Set<Int> = [
+            NSURLErrorNotConnectedToInternet,
+            NSURLErrorTimedOut,
+            NSURLErrorNetworkConnectionLost,
+            NSURLErrorCannotConnectToHost,
+            NSURLErrorCannotFindHost
+        ]
+        return networkCodes.contains(nsError.code)
     }
 
     // MARK: - Send an image message
