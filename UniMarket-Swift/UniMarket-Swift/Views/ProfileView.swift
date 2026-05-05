@@ -126,6 +126,9 @@ struct ProfileView: View {
                 }
                 .padding(.top, 10)
             }
+            .refreshable {
+                await vm.onProfileTabSelected()
+            }
         }
         .confirmationDialog("Change Profile Picture", isPresented: $showImageSourceSelection) {
             Button("Camera") {

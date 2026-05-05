@@ -42,6 +42,9 @@ struct HomeView: View {
                 .padding(.top, 16)
                 .padding(.bottom, 100)
             }
+            .refreshable {
+                await productStore.loadSavedItems()
+            }
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

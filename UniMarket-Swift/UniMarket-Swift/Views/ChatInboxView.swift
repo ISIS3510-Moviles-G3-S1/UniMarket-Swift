@@ -137,6 +137,9 @@ struct ChatInboxView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .refreshable {
+            chatStore.startObservingConversations()
+        }
     }
 
     private var emptyState: some View {

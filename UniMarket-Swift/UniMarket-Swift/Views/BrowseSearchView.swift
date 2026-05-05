@@ -8,6 +8,7 @@ struct BrowseSearchView: View {
     let onSelectProduct: (Product) -> Void
     let onResetFilters: () -> Void
     let onApplyFilters: () -> Void
+    var onRefresh: (() async -> Void)? = nil
 
     @Binding var showFilters: Bool
 
@@ -87,6 +88,9 @@ struct BrowseSearchView: View {
 
                     ScrollView {
                         browseContent
+                    }
+                    .refreshable {
+                        await onRefresh?()
                     }
                 }
 

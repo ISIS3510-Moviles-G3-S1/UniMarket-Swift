@@ -54,6 +54,9 @@ struct ActivityView: View {
                 }
                 .padding(.top, 10)
             }
+            .refreshable {
+                vm.sync(products: productStore.products, currentUserID: session.user?.uid)
+            }
         }
         .task {
             vm.sync(products: productStore.products, currentUserID: session.user?.uid)

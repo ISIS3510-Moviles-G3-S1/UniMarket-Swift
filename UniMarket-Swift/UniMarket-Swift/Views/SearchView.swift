@@ -75,6 +75,9 @@ struct SearchView: View {
                                 showFilters = false
                             }
                         },
+                        onRefresh: {
+                            await productStore.loadSavedItems()
+                        },
                         showFilters: $showFilters
                     )
                 } else {
