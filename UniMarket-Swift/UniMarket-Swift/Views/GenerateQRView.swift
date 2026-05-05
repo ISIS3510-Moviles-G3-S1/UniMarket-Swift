@@ -116,6 +116,7 @@ struct GenerateQRView: View {
         }
     }
 
+
     // MARK: - Loading view
 
     private var loadingView: some View {
