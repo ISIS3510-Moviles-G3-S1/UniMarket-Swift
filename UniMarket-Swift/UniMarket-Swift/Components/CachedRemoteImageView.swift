@@ -65,6 +65,11 @@ struct CachedRemoteImageView: View {
         Group {
             if let resolvedURL {
                 KFImage(resolvedURL)
+                    .onSuccess { result in
+                        // Mirror every Kingfisher download into our NSCache so the app
+                        // has explicit control over memory limits independent of Kingfisher.
+                        ProductImageCache.shared.store(result.image, for: resolvedURL)
+                    }
                     .placeholder {
                         placeholderView
                     }
@@ -80,6 +85,9 @@ struct CachedRemoteImageView: View {
 
     static func invalidateCache(for key: String) {
         ImageCache.default.removeImage(forKey: key)
+        if let url = URL(string: key) {
+            ProductImageCache.shared.remove(for: url)
+        }
     }
 }
 
